@@ -232,7 +232,7 @@ export async function processMonitorJob(job: Job<MonitorJobData>) {
   });
 
   const overallAvg =
-    allPosts.reduce((sum, p) => sum + p.engagementRate, 0) / allPosts.length;
+    allPosts.reduce((sum: number, p: { engagementRate: number }) => sum + p.engagementRate, 0) / allPosts.length;
   const threshold = overallAvg * 3;
 
   for (const post of allPosts) {
