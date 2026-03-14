@@ -1,0 +1,305 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Plan {
+  FREE
+  STARTER
+  GROWTH
+  SCALE
+}
+
+enum Role {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+enum CreditTransactionType {
+  PURCHASE
+  USAGE
+  REFUND
+  MONTHLY_RESET
+}
+
+enum ToneOfVoice {
+  CASUAL
+  PROFESSIONAL
+  HYPE
+  EDUCATIONAL
+  TESTIMONIAL
+}
+
+enum AssetType {
+  IMAGE
+  VIDEO
+  AUDIO
+  MUSIC
+}
+
+enum Platform {
+  TIKTOK
+  INSTAGRAM
+  YOUTUBE
+}
+
+enum WatchType {
+  ACCOUNT
+  HASHTAG
+  KEYWORD
+}
+
+enum ScanFrequency {
+  DAILY
+  TWICE_DAILY
+  WEEKLY
+}
+
+enum VideoType {
+  TALKING_HEAD
+  FACELESS
+  CLONED
+}
+
+enum VideoStatus {
+  QUEUED
+  SCRAPING
+  SCRIPTING
+  GENERATING_AUDIO
+  GENERATING_AVATAR
+  COMPOSING
+  COMPLETED
+  FAILED
+}
+
+model Organization {
+  id                   String   @id @default(uuid())
+  clerkOrgId           String   @unique
+  name                 String
+  plan                 Plan     @default(FREE)
+  creditsBalance       Int      @default(3)
+  creditsMonthly       Int      @default(3)
+  stripeCustomerId     String?  @unique
+  stripeSubscriptionId String?  @unique
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  users              User[]
+  creditTransactions CreditTransaction[]
+  brandKits          BrandKit[]
+  products           Product[]
+  assets             Asset[]
+  templates          Template[]
+  competitorWatches  CompetitorWatch[]
+  videos             Video[]
+  tikTokAccounts     TikTokAccount[]
+}
+
+model User {
+  id          String   @id @default(uuid())
+  clerkUserId String   @unique
+  orgId       String
+  role        Role     @default(MEMBER)
+  email       String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+}
+
+model CreditTransaction {
+  id          String                @id @default(uuid())
+  orgId       String
+  amount      Int
+  type        CreditTransactionType
+  referenceId String?
+  createdAt   DateTime              @default(now())
+
+  org   Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  video Video?       @relation(fields: [referenceId], references: [id], onDelete: SetNull)
+
+  @@index([orgId])
+  @@index([referenceId])
+}
+
+model BrandKit {
+  id             String      @id @default(uuid())
+  orgId          String
+  name           String
+  logoUrl        String?
+  colors         Json        @default("{}")
+  toneOfVoice    ToneOfVoice @default(CASUAL)
+  targetAudience String?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  org      Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  products Product[]
+  videos   Video[]
+
+  @@index([orgId])
+}
+
+model Product {
+  id          String   @id @default(uuid())
+  orgId       String
+  brandKitId  String?
+  name        String
+  description String?
+  price       String?
+  sourceUrl   String?
+  images      Json     @default("[]")
+  reviews     Json     @default("[]")
+  scrapedData Json     @default("{}")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  org      Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  brandKit BrandKit?    @relation(fields: [brandKitId], references: [id], onDelete: SetNull)
+  videos   Video[]
+
+  @@index([orgId])
+}
+
+model Asset {
+  id        String    @id @default(uuid())
+  orgId     String
+  type      AssetType
+  url       String
+  filename  String
+  mimeType  String
+  sizeBytes Int
+  metadata  Json      @default("{}")
+  createdAt DateTime  @default(now())
+
+  org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+}
+
+model Template {
+  id              String    @id @default(uuid())
+  orgId           String?
+  sourceUrl       String?
+  sourcePlatform  Platform?
+  structure       Json
+  category        String?
+  industry        String[]  @default([])
+  engagementScore Float?
+  isPublic        Boolean   @default(false)
+  thumbnailUrl    String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  org             Organization?   @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  competitorPosts CompetitorPost[]
+  videos          Video[]
+
+  @@index([orgId])
+  @@index([isPublic])
+}
+
+model CompetitorWatch {
+  id            String         @id @default(uuid())
+  orgId         String
+  type          WatchType
+  platform      Platform
+  value         String
+  scanFrequency ScanFrequency  @default(DAILY)
+  lastScannedAt DateTime?
+  isActive      Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+
+  org   Organization     @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  posts CompetitorPost[]
+
+  @@index([orgId])
+  @@index([isActive])
+}
+
+model CompetitorPost {
+  id             String   @id @default(uuid())
+  watchId        String
+  platformPostId String
+  url            String
+  views          Int      @default(0)
+  likes          Int      @default(0)
+  shares         Int      @default(0)
+  comments       Int      @default(0)
+  engagementRate Float    @default(0)
+  isOutlier      Boolean  @default(false)
+  templateId     String?
+  discoveredAt   DateTime @default(now())
+
+  watch    CompetitorWatch @relation(fields: [watchId], references: [id], onDelete: Cascade)
+  template Template?       @relation(fields: [templateId], references: [id], onDelete: SetNull)
+
+  @@unique([watchId, platformPostId])
+  @@index([watchId])
+  @@index([isOutlier])
+}
+
+model Video {
+  id                 String      @id @default(uuid())
+  orgId              String
+  productId          String?
+  templateId         String?
+  brandKitId         String?
+  batchId            String?
+  type               VideoType
+  status             VideoStatus @default(QUEUED)
+  script             String?
+  scriptVariant      Json?
+  avatarId           String?
+  voiceId            String?
+  audioUrl           String?
+  avatarVideoUrl     String?
+  finalVideoUrl      String?
+  duration           Float?
+  creditsUsed        Int         @default(0)
+  error              String?
+  publishedAt        DateTime?
+  publishedUrl       String?
+  scheduledPublishAt DateTime?
+  tiktokAccountId    String?
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+
+  org            Organization       @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  product        Product?           @relation(fields: [productId], references: [id], onDelete: SetNull)
+  template       Template?          @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  brandKit       BrandKit?          @relation(fields: [brandKitId], references: [id], onDelete: SetNull)
+  tiktokAccount  TikTokAccount?     @relation(fields: [tiktokAccountId], references: [id], onDelete: SetNull)
+  creditTransactions CreditTransaction[]
+
+  @@index([orgId])
+  @@index([batchId])
+  @@index([status])
+  @@index([scheduledPublishAt])
+}
+
+model TikTokAccount {
+  id             String   @id @default(uuid())
+  orgId          String
+  tikTokUserId   String
+  handle         String
+  accessToken    String
+  refreshToken   String
+  tokenExpiresAt DateTime
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  org    Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  videos Video[]
+
+  @@unique([orgId, tikTokUserId])
+  @@index([orgId])
+}
