@@ -59,10 +59,10 @@ Workers are Node.js processes consuming from BullMQ queues. Each worker type han
 | Clone Analyzer | Viral video deconstruction | Gemini 2.5 Flash (native video analysis) |
 | Script Generator | Scene-by-scene script creation | Claude Sonnet 4.6 |
 | TTS | Text-to-speech conversion | ElevenLabs |
-| Avatar | Talking head video generation | D-ID / Creatify Aurora |
+| Avatar | Talking head video generation | D-ID (primary) |
 | Composer | Final video assembly | Remotion + FFmpeg |
 | Publisher | Auto-post to platforms | TikTok Content Posting API |
-| Monitor | Competitor scanning (cron) | TikTok/Instagram scraping |
+| Monitor | Competitor scanning (cron) | Apify (TikTok/Instagram scraper actors) |
 
 ---
 
@@ -74,9 +74,9 @@ The core differentiator. Three interconnected systems.
 
 **Input:** TikTok/Instagram Reel URL or uploaded video file.
 
-**Step 1 — Extract:** Download video via yt-dlp. Extract audio track (FFmpeg), sample key frames at scene changes (FFmpeg), scrape engagement metrics from platform.
+**Step 1 — Extract:** Download video via yt-dlp (primary), with RapidAPI TikTok downloader as fallback if yt-dlp fails. If both fail, user can upload the video file directly. Scrape engagement metrics via Apify scraper actors.
 
-**Step 2 — Analyze:** Send full video to Gemini 2.5 Flash (native video processing — understands pacing, transitions, temporal flow without frame extraction). Output is a structured JSON template:
+**Step 2 — Analyze:** Send full video to Gemini 2.5 Flash (native video processing — understands pacing, transitions, temporal flow, and audio/speech without separate transcription). No separate Whisper transcription step needed since Gemini processes audio natively. Output is a structured JSON template:
 
 ```json
 {
@@ -107,7 +107,7 @@ The core differentiator. Three interconnected systems.
 
 Users create watch lists targeting competitor TikTok accounts, hashtags, or keywords. Configuration includes platform and scan frequency (daily, twice daily, weekly).
 
-A cron-driven Monitor Worker scans watched accounts, collects engagement metrics, and flags outlier content (3x+ average engagement). Outliers are auto-deconstructed into templates. Users receive email and in-app notifications with one-click "Clone This" actions. Weekly trend digest summarizes top-performing content across all watch lists.
+A cron-driven Monitor Worker uses **Apify scraper actors** (pre-built TikTok and Instagram scrapers) to collect public post data and engagement metrics. Apify provides structured data via API — no custom scraping or headless browsers needed. The worker flags outlier content (3x+ average engagement), auto-deconstructs top performers into templates via the Clone Analyzer. Users receive email (Resend) and in-app notifications with one-click "Clone This" actions. Weekly trend digest summarizes top-performing content across all watch lists.
 
 ### 2.3 Template Marketplace
 
@@ -132,7 +132,7 @@ Scrape → Script → [TTS ‖ B-roll prep] → Avatar → Compose → Deliver
 2. **Script** (~5-10s) — Claude Sonnet 4.6 generates scene-by-scene script. If cloning, script is fitted to the template structure. If freeform, uses hook/benefit/CTA format. Multiple variant scripts generated for batch mode.
 3. **TTS** (~5-15s, parallel with 3b) — ElevenLabs converts script to audio. Per-scene audio segments.
 4. **B-roll prep** (~2-5s, parallel with 3a) — Resize product images, generate text overlays, fetch stock b-roll if needed.
-5. **Avatar** (~30-120s) — D-ID or Creatify Aurora API generates talking head video from audio + avatar selection. Skipped for faceless videos.
+5. **Avatar** (~30-120s) — D-ID API (primary — mature REST API, good developer experience, competitive pricing). Creatify Aurora is evaluated as a future upgrade path for higher realism. Skipped for faceless videos.
 6. **Compose** (~20-60s) — Remotion renders final video: avatar clips + b-roll + text overlays + captions + transitions + music + logo. Output: 1080x1920 MP4 (9:16).
 7. **Deliver** — Upload to R2, optionally publish to TikTok via Content Posting API, provide download link.
 
@@ -142,7 +142,7 @@ Scrape → Script → [TTS ‖ B-roll prep] → Avatar → Compose → Deliver
 |------|----------|------|
 | Talking Head | Full pipeline (includes avatar API) | ~1-3 credits |
 | Faceless | Skip avatar step (images + text + voiceover) | ~0.5-1 credit |
-| Cloned Structure | Template-driven, routes per scene type | Varies by scene types |
+| Cloned Structure | Template-driven, routes per scene type | Sum of scene costs: talking_head scenes = 1 credit each, faceless scenes (product_broll, text_overlay, testimonial) = 0.25 credits each. Example: 1 talking_head + 3 faceless scenes = 1.75 credits |
 
 ### Batch Variant Generation
 
@@ -164,7 +164,7 @@ Fan-out after script step. Each variant is an independent BullMQ flow running co
 
 **User** — Belongs to Organization. Fields: id, clerkUserId, orgId (FK), role (OWNER/ADMIN/MEMBER), email.
 
-**CreditTransaction** — Append-only ledger for all credit changes. Fields: id, orgId (FK), amount (+/-), type (PURCHASE/USAGE/REFUND/MONTHLY_RESET), referenceId (FK → Video, nullable).
+**CreditTransaction** — Append-only ledger for all credit changes. Fields: id, orgId (FK), amount (+/-), type (PURCHASE/USAGE/REFUND/MONTHLY_RESET), referenceId (FK → Video, nullable). Monthly reset zeroes unused credits and adds the plan's monthly allocation (credits do not roll over).
 
 **BrandKit** — Brand identity. Fields: id, orgId (FK), name, logoUrl, colors (json), toneOfVoice (enum), targetAudience.
 
@@ -178,7 +178,7 @@ Fan-out after script step. Each variant is an independent BullMQ flow running co
 
 **CompetitorPost** — Discovered content. Fields: id, watchId (FK), platformPostId, url, views, likes, shares, comments, engagementRate, isOutlier, templateId (FK, nullable).
 
-**Video** — Main entity. Fields: id, orgId (FK), productId (FK, nullable), templateId (FK, nullable), brandKitId (FK, nullable), batchId (uuid, nullable — groups variants), type (TALKING_HEAD/FACELESS/CLONED), status (QUEUED/SCRAPING/SCRIPTING/GENERATING_AUDIO/GENERATING_AVATAR/COMPOSING/COMPLETED/FAILED), script, scriptVariant (json), avatarId, voiceId, audioUrl, avatarVideoUrl, finalVideoUrl, duration, creditsUsed, error (nullable), publishedAt, publishedUrl.
+**Video** — Main entity. Fields: id, orgId (FK), productId (FK, nullable), templateId (FK, nullable), brandKitId (FK, nullable), batchId (uuid, nullable — groups variants), type (TALKING_HEAD/FACELESS/CLONED), status (QUEUED/SCRAPING/SCRIPTING/GENERATING_AUDIO/GENERATING_AVATAR/COMPOSING/COMPLETED/FAILED), script, scriptVariant (json), avatarId, voiceId, audioUrl, avatarVideoUrl, finalVideoUrl, duration, creditsUsed, error (nullable), publishedAt, publishedUrl, scheduledPublishAt (nullable), tiktokAccountId (FK → TikTokAccount, nullable).
 
 **TikTokAccount** — OAuth tokens. Fields: id, orgId (FK), tikTokUserId, handle, accessToken (encrypted AES-256-GCM), refreshToken (encrypted), tokenExpiresAt, isActive.
 
@@ -242,7 +242,8 @@ Fan-out after script step. Each variant is an independent BullMQ flow running co
 | Clerk | Auth, organizations, user management | Free to $0.02/MAU |
 | Stripe | Subscriptions, credit purchases | 2.9% + $0.30/txn |
 | Firecrawl | Product page scraping | $19/mo (3K scrapes) |
-| OpenAI Whisper | Audio transcription (for cloning) | $0.006/min |
+| Apify | TikTok/Instagram scraping (competitor monitoring + video download fallback) | $49/mo (Actor runs) |
+| Resend | Transactional email (alerts, digests) | Free to $20/mo |
 | Vercel | Next.js hosting | $20/mo (Pro) |
 | Railway | BullMQ workers + Remotion rendering | ~$20-100/mo |
 | Supabase | PostgreSQL | $25/mo (Pro) |
@@ -267,7 +268,7 @@ Fan-out after script step. Each variant is an independent BullMQ flow running co
 
 | Tier | Price | Credits | Clones | Monitors | Seats | Key Features |
 |------|-------|---------|--------|----------|-------|-------------|
-| Free | $0/mo | 3 videos | 0 | 0 | 1 | Brand watermark, 1 brand kit |
+| Free | $0/mo | 3 (any type) | 0 | 0 | 1 | Brand watermark, 1 brand kit |
 | Starter | $29/mo | 30 | 5/mo | 0 | 1 | No watermark, 3 brand kits, TikTok publishing, template library |
 | Growth | $79/mo | 100 | 25/mo | 5 | 3 | Unlimited brand kits, batch generation |
 | Scale | $199/mo | 300 | Unlimited | 20 | 10 | Priority rendering, API access |
@@ -281,7 +282,7 @@ Fan-out after script step. Each variant is an independent BullMQ flow running co
 - **No watermarks** on paid tiers. Free tier has a platform brand watermark (not AI disclosure).
 - **No AI metadata** embedded in video files.
 - **No forced disclosure labels.** Output is indistinguishable from human-created UGC.
-- **TikTok `is_aigc` flag** defaults to `false`. Users can toggle on.
+- **TikTok `is_aigc` flag** defaults to `false`. Users can toggle on. **Acknowledged risk:** This is an explicit business decision. TikTok's policy requires accurate AI disclosure; setting this to `false` for AI-generated content may violate their TOS. If TikTok changes enforcement (e.g., auto-detection of AI content), the platform may need to revisit this default. The toggle exists so users can comply if they choose.
 - **Full commercial rights** — users own their content, use anywhere, no attribution.
 - **Legal responsibility** for advertising disclosure compliance sits with the user per Terms of Service (same model as Creatify, Arcads, all competitors).
 
@@ -299,11 +300,12 @@ Credits deducted at job enqueue, refunded on failure. Each step has retry logic:
 | Failure | Strategy | Credits |
 |---------|----------|---------|
 | Scraping | Retry 2x, Firecrawl → Puppeteer fallback, prompt manual entry | No charge |
-| Script generation | Retry, fallback to alternate LLM | No charge |
+| Script generation | Retry, fallback to GPT-4o | No charge |
 | TTS API | Retry 2x with exponential backoff | Refund |
 | Avatar API | Retry 1x, preserve intermediate artifacts for step-retry | Refund |
 | Remotion render | Retry 1x, log config, alert engineering | Refund |
 | TikTok publish | Video stored; user gets video + error, can retry or download | No extra charge |
+| Video download (clone) | yt-dlp → RapidAPI fallback → prompt user to upload file directly | No charge |
 | Video analysis (clone) | Retry with higher sampling; inform if video private/deleted | Clone credit only |
 
 ### Testing
@@ -339,7 +341,7 @@ TikTok only at launch.
 - **TikTok Content Posting API:** OAuth 2.0, `POST /v2/post/publish/video/init/`, chunked file upload.
 - **Rate limits:** 6 init requests/min, ~15 posts/day/creator.
 - **Multi-account:** Users connect multiple TikTok accounts via OAuth. Each account is independently managed.
-- **Scheduling:** Users can schedule publish time. Cron worker triggers at scheduled time.
+- **Scheduling:** Users can set `scheduledPublishAt` on a video. The Publisher Worker polls for videos past their scheduled time (BullMQ repeatable job, runs every minute).
 - **Architecture supports adding Instagram Reels and YouTube Shorts later** (Graph API and Data API v3 respectively).
 
 ---
