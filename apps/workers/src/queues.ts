@@ -15,6 +15,10 @@ export const ttsQueue = new Queue("tts", { connection });
 export const avatarQueue = new Queue("avatar", { connection });
 export const composerQueue = new Queue("composer", { connection });
 
+// Clone pipeline queues
+export const cloneDownloadQueue = new Queue("clone-download", { connection });
+export const cloneAnalyzeQueue = new Queue("clone-analyze", { connection });
+
 export const QUEUE_NAMES = {
   VIDEO: "video",
   CLONE: "clone",
@@ -25,4 +29,6 @@ export const QUEUE_NAMES = {
   TTS: "tts",
   AVATAR: "avatar",
   COMPOSER: "composer",
+  CLONE_DOWNLOAD: "clone-download",
+  CLONE_ANALYZE: "clone-analyze",
 } as const;

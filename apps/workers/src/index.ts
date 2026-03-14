@@ -6,6 +6,9 @@ import { processTTSJob } from "./processors/tts";
 import { processAvatarJob } from "./processors/avatar";
 import { processComposerJob } from "./processors/composer";
 import { handlePipelineFailure, closePipeline } from "./processors/pipeline";
+import { processVideoDownloaderJob } from "./processors/video-downloader";
+import { processCloneAnalyzerJob } from "./processors/clone-analyzer";
+import { closeClonePipeline } from "./processors/clone-pipeline";
 
 async function main() {
   const redis = createRedisConnection();
@@ -42,12 +45,26 @@ async function main() {
     concurrency: 2,
   });
 
+  const videoDownloaderWorker = new Worker(
+    "clone-download",
+    processVideoDownloaderJob,
+    { connection, concurrency: 3 }
+  );
+
+  const cloneAnalyzerWorker = new Worker(
+    "clone-analyze",
+    processCloneAnalyzerJob,
+    { connection, concurrency: 2 }
+  );
+
   const workers = [
     scraperWorker,
     scriptWorker,
     ttsWorker,
     avatarWorker,
     composerWorker,
+    videoDownloaderWorker,
+    cloneAnalyzerWorker,
   ];
 
   // -------------------------------------------------------------------
@@ -78,11 +95,13 @@ async function main() {
   }
 
   console.log("Workers registered:");
-  console.log("  - scraper    (concurrency: 5)");
-  console.log("  - script     (concurrency: 3)");
-  console.log("  - tts        (concurrency: 5)");
-  console.log("  - avatar     (concurrency: 3)");
-  console.log("  - composer   (concurrency: 2)");
+  console.log("  - scraper          (concurrency: 5)");
+  console.log("  - script           (concurrency: 3)");
+  console.log("  - tts              (concurrency: 5)");
+  console.log("  - avatar           (concurrency: 3)");
+  console.log("  - composer         (concurrency: 2)");
+  console.log("  - clone-download   (concurrency: 3)");
+  console.log("  - clone-analyze    (concurrency: 2)");
   console.log("Workers ready and listening for jobs...");
 
   // -------------------------------------------------------------------
@@ -94,6 +113,7 @@ async function main() {
 
     await Promise.all(workers.map((w) => w.close()));
     await closePipeline();
+    await closeClonePipeline();
     await redis.quit();
 
     console.log("All workers shut down.");
