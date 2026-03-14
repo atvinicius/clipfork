@@ -1,0 +1,18 @@
+{
+  "name": "ugc",
+  "private": true,
+  "workspaces": ["apps/*", "packages/*"],
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "test": "turbo test",
+    "db:push": "pnpm --filter @ugc/db db:push",
+    "db:migrate": "pnpm --filter @ugc/db db:migrate",
+    "db:studio": "pnpm --filter @ugc/db db:studio"
+  },
+  "devDependencies": {
+    "turbo": "^2"
+  },
+  "packageManager": "pnpm@9.15.4"
+}

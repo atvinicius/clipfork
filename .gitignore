@@ -1,4 +1,8 @@
-.superpowers/
 node_modules/
+.next/
+dist/
 .env
 .env.local
+.turbo/
+.superpowers/
+*.tsbuildinfo
