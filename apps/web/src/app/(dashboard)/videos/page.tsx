@@ -493,19 +493,15 @@ export default function VideosPage() {
 
               <div className="flex flex-wrap gap-3">
                 {selectedVideoQuery.data.finalVideoUrl && (
-                  <Button
-                    className="flex-1 bg-[#7C3AED] hover:bg-[#7C3AED]/90"
-                    asChild
+                  <a
+                    href={selectedVideoQuery.data.finalVideoUrl}
+                    download
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex flex-1 items-center justify-center rounded-md px-4 py-2 text-sm font-medium text-white bg-[#7C3AED] hover:bg-[#7C3AED]/90 transition-colors"
                   >
-                    <a
-                      href={selectedVideoQuery.data.finalVideoUrl}
-                      download
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      Download
-                    </a>
-                  </Button>
+                    Download
+                  </a>
                 )}
                 {selectedVideoQuery.data.status === "COMPLETED" &&
                   !selectedVideoQuery.data.publishedAt && (
