@@ -1,5 +1,5 @@
 import { Job } from "bullmq";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import OpenAI from "openai";
 import { prisma } from "@ugc/db";
 import { templateStructureSchema } from "@ugc/shared";
 import { getPresignedUrl } from "../lib/r2";
@@ -21,15 +21,16 @@ export interface CloneAnalyzerResult {
 }
 
 // ---------------------------------------------------------------------------
-// Gemini client
+// OpenRouter client
 // ---------------------------------------------------------------------------
 
-function getGeminiClient(): GoogleGenerativeAI {
-  const apiKey = process.env.GOOGLE_AI_API_KEY;
-  if (!apiKey) {
-    throw new Error("GOOGLE_AI_API_KEY is not configured");
-  }
-  return new GoogleGenerativeAI(apiKey);
+function getOpenRouterClient(): OpenAI {
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  if (!apiKey) throw new Error("OPENROUTER_API_KEY is not set");
+  return new OpenAI({
+    baseURL: "https://openrouter.ai/api/v1",
+    apiKey,
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -113,14 +114,12 @@ function detectPlatform(
 // ---------------------------------------------------------------------------
 
 function parseJsonFromResponse(text: string): unknown {
-  // Try direct parse first
   try {
     return JSON.parse(text);
   } catch {
     // noop
   }
 
-  // Try extracting from markdown code blocks
   const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
   if (jsonMatch) {
     try {
@@ -130,7 +129,6 @@ function parseJsonFromResponse(text: string): unknown {
     }
   }
 
-  // Try finding first { and last }
   const start = text.indexOf("{");
   const end = text.lastIndexOf("}");
   if (start >= 0 && end > start) {
@@ -141,7 +139,7 @@ function parseJsonFromResponse(text: string): unknown {
     }
   }
 
-  throw new Error("Could not parse JSON from Gemini response");
+  throw new Error("Could not parse JSON from response");
 }
 
 // ---------------------------------------------------------------------------
@@ -172,23 +170,37 @@ export async function processCloneAnalyzerJob(
     `[clone-analyzer] Downloaded video (${videoBuffer.length} bytes)`
   );
 
-  // 2. Analyze with Gemini 2.5 Flash
-  const genAI = getGeminiClient();
-  const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-
+  // 2. Analyze with Gemini 2.5 Flash via OpenRouter
+  const client = getOpenRouterClient();
   const videoBase64 = videoBuffer.toString("base64");
 
-  const result = await model.generateContent([
-    {
-      inlineData: {
-        mimeType: "video/mp4",
-        data: videoBase64,
+  const result = await client.chat.completions.create({
+    model: "google/gemini-2.5-flash",
+    max_tokens: 4096,
+    messages: [
+      {
+        role: "user",
+        content: [
+          {
+            type: "text",
+            text: ANALYSIS_SYSTEM_PROMPT,
+          },
+          {
+            // @ts-expect-error -- OpenRouter supports video_url but openai SDK types don't include it
+            type: "video_url",
+            video_url: {
+              url: `data:video/mp4;base64,${videoBase64}`,
+            },
+          },
+        ],
       },
-    },
-    { text: ANALYSIS_SYSTEM_PROMPT },
-  ]);
+    ],
+  });
 
-  const responseText = result.response.text();
+  const responseText = result.choices[0]?.message?.content;
+  if (!responseText) {
+    throw new Error("No text content in Gemini response");
+  }
   console.log(`[clone-analyzer] Gemini response received`);
 
   // 3. Parse and validate the structure
@@ -208,7 +220,7 @@ export async function processCloneAnalyzerJob(
       orgId,
       sourceUrl,
       sourcePlatform: platform,
-      structure: validated as unknown as Record<string, unknown>,
+      structure: validated as unknown as object,
       category: validated.structure.hook.type,
       industry: [],
       engagementScore: null,

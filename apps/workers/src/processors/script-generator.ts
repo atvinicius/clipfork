@@ -1,5 +1,5 @@
 import { Job } from "bullmq";
-import Anthropic from "@anthropic-ai/sdk";
+import OpenAI from "openai";
 import { prisma } from "@ugc/db";
 
 // ---------------------------------------------------------------------------
@@ -76,12 +76,15 @@ interface ClonedScene {
 }
 
 // ---------------------------------------------------------------------------
-// Anthropic client
+// OpenRouter client
 // ---------------------------------------------------------------------------
 
-function getAnthropicClient(): Anthropic {
-  return new Anthropic({
-    apiKey: process.env.ANTHROPIC_API_KEY!,
+function getOpenRouterClient(): OpenAI {
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  if (!apiKey) throw new Error("OPENROUTER_API_KEY is not set");
+  return new OpenAI({
+    baseURL: "https://openrouter.ai/api/v1",
+    apiKey,
   });
 }
 
@@ -212,14 +215,12 @@ Make the content feel authentic to the product while matching the template pacin
 // ---------------------------------------------------------------------------
 
 function parseJsonFromResponse(text: string): unknown {
-  // Try to extract JSON from the response, handling markdown code blocks
   const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
   const jsonStr = jsonMatch ? jsonMatch[1]!.trim() : text.trim();
 
   try {
     return JSON.parse(jsonStr);
   } catch {
-    // Try to find the first [ or { and parse from there
     const arrayStart = jsonStr.indexOf("[");
     const objStart = jsonStr.indexOf("{");
     const start = Math.min(
@@ -253,15 +254,13 @@ export async function processScriptJob(job: Job<ScriptJobData>) {
   console.log(`[script] Generating ${videoType} script for video ${videoId}`);
 
   try {
-    // Update video status
     await prisma.video.update({
       where: { id: videoId },
       data: { status: "SCRIPTING" },
     });
 
-    const anthropic = getAnthropicClient();
+    const client = getOpenRouterClient();
 
-    // Build prompt based on video type
     let userPrompt: string;
     switch (videoType) {
       case "TALKING_HEAD":
@@ -280,23 +279,22 @@ export async function processScriptJob(job: Job<ScriptJobData>) {
         throw new Error(`Unknown video type: ${videoType}`);
     }
 
-    // Call Claude
-    const response = await anthropic.messages.create({
-      model: "claude-sonnet-4-6",
+    const response = await client.chat.completions.create({
+      model: "anthropic/claude-sonnet-4-6",
       max_tokens: 2048,
-      system: SYSTEM_PROMPT,
-      messages: [{ role: "user", content: userPrompt }],
+      messages: [
+        { role: "system", content: SYSTEM_PROMPT },
+        { role: "user", content: userPrompt },
+      ],
     });
 
-    // Extract text content
-    const textContent = response.content.find((c) => c.type === "text");
-    if (!textContent || textContent.type !== "text") {
-      throw new Error("No text content in Claude response");
+    const textContent = response.choices[0]?.message?.content;
+    if (!textContent) {
+      throw new Error("No text content in response");
     }
 
-    const parsedScript = parseJsonFromResponse(textContent.text);
+    const parsedScript = parseJsonFromResponse(textContent);
 
-    // Build a flat script string for TTS
     let scriptText: string;
     let scriptVariant: unknown;
 
@@ -309,7 +307,6 @@ export async function processScriptJob(job: Job<ScriptJobData>) {
       scriptText = scenes.map((s) => s.voiceover).join(" ");
       scriptVariant = { type: "FACELESS", scenes };
     } else {
-      // CLONED - parse hook + scenes + cta into flat list
       const clonedScript = parsedScript as {
         hook: ClonedScene;
         scenes: ClonedScene[];
@@ -324,7 +321,6 @@ export async function processScriptJob(job: Job<ScriptJobData>) {
       scriptVariant = { type: "CLONED", ...clonedScript };
     }
 
-    // Update Video record
     await prisma.video.update({
       where: { id: videoId },
       data: {
