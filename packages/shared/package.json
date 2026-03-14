@@ -11,7 +11,7 @@
     }
   },
   "scripts": {
-    "build": "tsc --module CommonJS --moduleResolution node --outDir dist --skipLibCheck --declaration false",
+    "build": "tsc --module CommonJS --moduleResolution node --outDir dist --skipLibCheck --declaration false --declarationMap false",
     "test": "vitest run",
     "test:watch": "vitest"
   },

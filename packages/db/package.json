@@ -11,7 +11,7 @@
     }
   },
   "scripts": {
-    "build": "tsc --module CommonJS --moduleResolution node --outDir dist --skipLibCheck --declaration false",
+    "build": "tsc --module CommonJS --moduleResolution node --outDir dist --skipLibCheck --declaration false --declarationMap false",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
