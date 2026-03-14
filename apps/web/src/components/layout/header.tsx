@@ -7,7 +7,7 @@ export function Header({ creditsBalance }: { creditsBalance?: number }) {
       <div />
       <div className="flex items-center gap-4">
         {creditsBalance !== undefined && (
-          <Badge variant="secondary" className="text-sm">
+          <Badge className="bg-[#7C3AED] text-white hover:bg-[#7C3AED]/90 text-sm">
             {creditsBalance} credits
           </Badge>
         )}
