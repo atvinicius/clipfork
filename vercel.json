@@ -1,4 +1,5 @@
 {
+  "framework": null,
   "buildCommand": "cd packages/db && npx prisma generate && cd ../.. && pnpm turbo build --filter=@ugc/web...",
   "outputDirectory": "apps/web/.next",
   "installCommand": "pnpm install"
