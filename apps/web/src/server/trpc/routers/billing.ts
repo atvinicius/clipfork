@@ -2,9 +2,11 @@ import { z } from "zod";
 import { router, protectedProcedure } from "../init";
 import Stripe from "stripe";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2025-02-24.acacia" as Stripe.LatestApiVersion,
-});
+function getStripe() {
+  return new Stripe(process.env.STRIPE_SECRET_KEY!, {
+    apiVersion: "2025-02-24.acacia" as Stripe.LatestApiVersion,
+  });
+}
 
 export const billingRouter = router({
   getPlan: protectedProcedure.query(async ({ ctx }) => {
@@ -17,7 +19,7 @@ export const billingRouter = router({
 
   createPortalSession: protectedProcedure.mutation(async ({ ctx }) => {
     if (!ctx.org.stripeCustomerId) {
-      const customer = await stripe.customers.create({
+      const customer = await getStripe().customers.create({
         metadata: { orgId: ctx.org.id },
       });
       await ctx.prisma.organization.update({
@@ -27,7 +29,7 @@ export const billingRouter = router({
       ctx.org.stripeCustomerId = customer.id;
     }
 
-    const session = await stripe.billingPortal.sessions.create({
+    const session = await getStripe().billingPortal.sessions.create({
       customer: ctx.org.stripeCustomerId,
       return_url: `${process.env.NEXT_PUBLIC_APP_URL}/billing`,
     });
@@ -43,7 +45,7 @@ export const billingRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       if (!ctx.org.stripeCustomerId) {
-        const customer = await stripe.customers.create({
+        const customer = await getStripe().customers.create({
           metadata: { orgId: ctx.org.id },
         });
         await ctx.prisma.organization.update({
@@ -53,7 +55,7 @@ export const billingRouter = router({
         ctx.org.stripeCustomerId = customer.id;
       }
 
-      const session = await stripe.checkout.sessions.create({
+      const session = await getStripe().checkout.sessions.create({
         customer: ctx.org.stripeCustomerId,
         line_items: [{ price: input.priceId, quantity: 1 }],
         mode: "subscription",
