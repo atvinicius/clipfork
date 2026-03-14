@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   ArrowRight,
@@ -139,32 +139,47 @@ function Reveal({
    ================================================================ */
 
 export default function AnimatedLanding() {
-  const [scrollY, setScrollY] = useState(0);
   const heroRef = useRef<HTMLDivElement>(null);
-
-  const handleScroll = useCallback(() => {
-    setScrollY(window.scrollY);
-  }, []);
+  const heroContentRef = useRef<HTMLDivElement>(null);
+  const navRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
-    window.addEventListener("scroll", handleScroll, { passive: true });
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, [handleScroll]);
-
-  const heroParallax = Math.min(scrollY * 0.3, 200);
-  const heroOpacity = Math.max(1 - scrollY / 600, 0);
+    let ticking = false;
+    const onScroll = () => {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(() => {
+        const y = window.scrollY;
+        if (heroContentRef.current) {
+          const parallax = Math.min(y * 0.3, 200);
+          const opacity = Math.max(1 - y / 600, 0);
+          heroContentRef.current.style.transform = `translateY(${parallax}px)`;
+          heroContentRef.current.style.opacity = String(opacity);
+        }
+        if (navRef.current) {
+          if (y > 50) {
+            navRef.current.style.backgroundColor = "rgba(5,5,7,0.85)";
+            navRef.current.style.backdropFilter = "blur(20px)";
+            navRef.current.style.borderBottom = "1px solid rgba(255,255,255,0.05)";
+          } else {
+            navRef.current.style.backgroundColor = "transparent";
+            navRef.current.style.backdropFilter = "none";
+            navRef.current.style.borderBottom = "none";
+          }
+        }
+        ticking = false;
+      });
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
 
   return (
     <div className="min-h-screen bg-[#050507] text-white overflow-x-hidden">
       {/* ========== NAVBAR ========== */}
       <nav
+        ref={navRef}
         className="fixed top-0 left-0 right-0 z-50 transition-all duration-300"
-        style={{
-          backgroundColor: scrollY > 50 ? "rgba(5,5,7,0.85)" : "transparent",
-          backdropFilter: scrollY > 50 ? "blur(20px)" : "none",
-          borderBottom:
-            scrollY > 50 ? "1px solid rgba(255,255,255,0.05)" : "none",
-        }}
       >
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="flex h-16 items-center justify-between">
@@ -221,42 +236,36 @@ export default function AnimatedLanding() {
               backgroundSize: "64px 64px",
             }}
           />
-          {/* Animated gradient orbs */}
+          {/* Gradient orbs — static, GPU-promoted */}
           <div
-            className="absolute w-[800px] h-[800px] rounded-full blur-[160px]"
+            className="absolute w-[600px] h-[600px] rounded-full blur-[80px] will-change-transform"
             style={{
-              background: "radial-gradient(circle, rgba(124,58,237,0.15) 0%, transparent 70%)",
+              background: "radial-gradient(circle, rgba(124,58,237,0.12) 0%, transparent 70%)",
               top: "10%",
               left: "20%",
-              animation: "float-slow 20s ease-in-out infinite",
             }}
           />
           <div
-            className="absolute w-[600px] h-[600px] rounded-full blur-[140px]"
+            className="absolute w-[500px] h-[500px] rounded-full blur-[70px] will-change-transform"
             style={{
-              background: "radial-gradient(circle, rgba(163,230,53,0.08) 0%, transparent 70%)",
+              background: "radial-gradient(circle, rgba(163,230,53,0.06) 0%, transparent 70%)",
               top: "30%",
               right: "10%",
-              animation: "float-slow 25s ease-in-out infinite reverse",
             }}
           />
           <div
-            className="absolute w-[500px] h-[500px] rounded-full blur-[120px]"
+            className="absolute w-[400px] h-[400px] rounded-full blur-[60px] will-change-transform"
             style={{
-              background: "radial-gradient(circle, rgba(6,182,212,0.06) 0%, transparent 70%)",
+              background: "radial-gradient(circle, rgba(6,182,212,0.05) 0%, transparent 70%)",
               bottom: "10%",
               left: "40%",
-              animation: "float-slow 18s ease-in-out infinite",
             }}
           />
         </div>
 
         <div
-          className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 w-full"
-          style={{
-            transform: `translateY(${heroParallax}px)`,
-            opacity: heroOpacity,
-          }}
+          ref={heroContentRef}
+          className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 w-full will-change-[transform,opacity]"
         >
           <div className="mx-auto max-w-4xl text-center">
             {/* Badge */}
@@ -902,12 +911,6 @@ export default function AnimatedLanding() {
       <style dangerouslySetInnerHTML={{ __html: `
         html { scroll-behavior: smooth; }
 
-        @keyframes float-slow {
-          0%, 100% { transform: translate(0, 0); }
-          33% { transform: translate(30px, -30px); }
-          66% { transform: translate(-20px, 20px); }
-        }
-
         @keyframes scan {
           0% { top: 0; opacity: 0; }
           10% { opacity: 1; }
@@ -924,14 +927,6 @@ export default function AnimatedLanding() {
           0% { background-position: 0% 50%; }
           50% { background-position: 100% 50%; }
           100% { background-position: 0% 50%; }
-        }
-
-        .animate-float-slow {
-          animation: float-slow 20s ease-in-out infinite;
-        }
-
-        .animate-float-slow-reverse {
-          animation: float-slow 25s ease-in-out infinite reverse;
         }
 
         .animate-scan {
