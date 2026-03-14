@@ -6,7 +6,7 @@ RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
 WORKDIR /app
 
 # Copy workspace files
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json tsconfig.json ./
 COPY packages/db/package.json packages/db/
 COPY packages/shared/package.json packages/shared/
 COPY apps/workers/package.json apps/workers/
