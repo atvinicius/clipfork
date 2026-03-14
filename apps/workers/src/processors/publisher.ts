@@ -1,4 +1,3 @@
-import { Job } from "bullmq";
 import { prisma } from "@ugc/db";
 import { decrypt, encrypt } from "@ugc/shared";
 
@@ -163,7 +162,7 @@ async function checkPublishStatus(
 // Processor
 // ---------------------------------------------------------------------------
 
-export async function processPublishJob(job: Job<PublishJobData>) {
+export async function processPublishJob(job: { data: PublishJobData }) {
   const { videoId, tiktokAccountId, caption, hashtags } = job.data;
 
   console.log(

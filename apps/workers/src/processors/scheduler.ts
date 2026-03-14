@@ -1,6 +1,5 @@
-import { Job } from "bullmq";
 import { prisma } from "@ugc/db";
-import { publishQueue } from "../queues";
+import { sendJob, QUEUE_NAMES } from "../queues";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -14,7 +13,7 @@ export interface SchedulerJobData {
 // Processor
 // ---------------------------------------------------------------------------
 
-export async function processSchedulerJob(job: Job<SchedulerJobData>) {
+export async function processSchedulerJob(job: { data: SchedulerJobData }) {
   console.log(`[scheduler] Running scheduled publish check...`);
 
   // Find videos that are ready to publish
@@ -46,7 +45,7 @@ export async function processSchedulerJob(job: Job<SchedulerJobData>) {
   );
 
   for (const video of videosToPublish) {
-    await publishQueue.add(`publish-${video.id}`, {
+    await sendJob(QUEUE_NAMES.PUBLISH, {
       videoId: video.id,
       tiktokAccountId: video.tiktokAccountId!,
     });

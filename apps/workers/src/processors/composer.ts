@@ -1,4 +1,3 @@
-import { Job } from "bullmq";
 import { prisma } from "@ugc/db";
 
 // ---------------------------------------------------------------------------
@@ -137,7 +136,7 @@ function buildCompositionConfig(
 // Processor
 // ---------------------------------------------------------------------------
 
-export async function processComposerJob(job: Job<ComposerJobData>) {
+export async function processComposerJob(job: { data: ComposerJobData }) {
   const { videoId } = job.data;
 
   console.log(`[composer] Starting composition for video ${videoId}`);
@@ -152,16 +151,12 @@ export async function processComposerJob(job: Job<ComposerJobData>) {
     // Calculate total duration from script
     const totalDuration = calculateTotalDuration(job.data.script);
 
-    await job.updateProgress(20);
-
     // Build composition config
     const compositionConfig = buildCompositionConfig(job.data, totalDuration);
 
     console.log(
       `[composer] Composition config built: ${compositionConfig.scenes.length} scenes, ${totalDuration}s total`
     );
-
-    await job.updateProgress(40);
 
     // ---------------------------------------------------------------------------
     // MVP Placeholder: In production, this would render with Remotion.
@@ -174,8 +169,6 @@ export async function processComposerJob(job: Job<ComposerJobData>) {
     console.log(
       `[composer] Output would be uploaded to: ${compositionConfig.outputKey}`
     );
-
-    await job.updateProgress(80);
 
     // Generate a placeholder URL — in production this would be the R2 URL of the rendered video
     const placeholderUrl = process.env.R2_PUBLIC_URL
@@ -191,8 +184,6 @@ export async function processComposerJob(job: Job<ComposerJobData>) {
         duration: totalDuration,
       },
     });
-
-    await job.updateProgress(100);
 
     console.log(`[composer] Video ${videoId} marked as COMPLETED`);
 

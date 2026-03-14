@@ -2,17 +2,7 @@ import { z } from "zod";
 import { router, protectedProcedure } from "../init";
 import { TRPCError } from "@trpc/server";
 import { encrypt } from "@ugc/shared";
-import { Queue } from "bullmq";
-import IORedis from "ioredis";
-
-function getPublishQueue() {
-  const redis = new IORedis(process.env.REDIS_URL ?? "redis://localhost:6379", {
-    maxRetriesPerRequest: null,
-  });
-  return new Queue("publish", {
-    connection: redis as unknown as import("bullmq").ConnectionOptions,
-  });
-}
+import { sendJob } from "../../queue";
 
 export const tiktokRouter = router({
   getAuthUrl: protectedProcedure.query(() => {
@@ -57,7 +47,6 @@ export const tiktokRouter = router({
 
       const redirectUri = `${process.env.NEXT_PUBLIC_APP_URL}/api/tiktok/callback`;
 
-      // Exchange code for tokens
       const tokenResponse = await fetch(
         "https://open.tiktokapis.com/v2/oauth/token/",
         {
@@ -88,7 +77,6 @@ export const tiktokRouter = router({
         open_id: string;
       };
 
-      // Get user info
       const userResponse = await fetch(
         "https://open.tiktokapis.com/v2/user/info/?fields=open_id,display_name,avatar_url,username",
         {
@@ -109,7 +97,6 @@ export const tiktokRouter = router({
           tokenData.open_id;
       }
 
-      // Store encrypted tokens
       const expiresAt = new Date(
         Date.now() + tokenData.expires_in * 1000
       );
@@ -179,7 +166,6 @@ export const tiktokRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      // Verify video belongs to org
       const video = await ctx.prisma.video.findFirst({
         where: {
           id: input.videoId,
@@ -195,7 +181,6 @@ export const tiktokRouter = router({
         });
       }
 
-      // Verify TikTok account belongs to org
       const account = await ctx.prisma.tikTokAccount.findFirst({
         where: {
           id: input.tiktokAccountId,
@@ -211,21 +196,17 @@ export const tiktokRouter = router({
         });
       }
 
-      // Link video to TikTok account
       await ctx.prisma.video.update({
         where: { id: input.videoId },
         data: { tiktokAccountId: input.tiktokAccountId },
       });
 
-      // Enqueue publish job
-      const queue = getPublishQueue();
-      await queue.add(`publish-${input.videoId}`, {
+      await sendJob("publish", {
         videoId: input.videoId,
         tiktokAccountId: input.tiktokAccountId,
         caption: input.caption,
         hashtags: input.hashtags,
       });
-      await queue.close();
 
       return { queued: true };
     }),
@@ -241,7 +222,6 @@ export const tiktokRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      // Verify video belongs to org
       const video = await ctx.prisma.video.findFirst({
         where: {
           id: input.videoId,
@@ -257,7 +237,6 @@ export const tiktokRouter = router({
         });
       }
 
-      // Verify TikTok account belongs to org
       const account = await ctx.prisma.tikTokAccount.findFirst({
         where: {
           id: input.tiktokAccountId,
@@ -273,7 +252,6 @@ export const tiktokRouter = router({
         });
       }
 
-      // Set scheduling info on video
       return ctx.prisma.video.update({
         where: { id: input.videoId },
         data: {

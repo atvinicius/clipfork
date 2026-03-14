@@ -1,20 +1,11 @@
-import { FlowProducer, type ConnectionOptions } from "bullmq";
 import { prisma } from "@ugc/db";
 import { calculateClonedVideoCredits } from "@ugc/shared";
-import { createRedisConnection } from "../connection";
+import { sendJob, QUEUE_NAMES } from "../queues";
 import type { ScriptJobData } from "./script-generator";
-import type { TTSJobData } from "./tts";
-import type { AvatarJobData } from "./avatar";
-import type { ComposerJobData } from "./composer";
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
-
-export interface ClonePipelineAnalyzeOptions {
-  url: string;
-  orgId: string;
-}
 
 export interface ClonePipelineGenerateOptions {
   videoId: string;
@@ -25,20 +16,6 @@ export interface ClonePipelineGenerateOptions {
   voiceId: string;
   avatarId?: string;
   brandKitId?: string;
-}
-
-// ---------------------------------------------------------------------------
-// Flow producer singleton
-// ---------------------------------------------------------------------------
-
-let flowProducer: FlowProducer | null = null;
-
-function getFlowProducer(): FlowProducer {
-  if (!flowProducer) {
-    const connection = createRedisConnection() as unknown as ConnectionOptions;
-    flowProducer = new FlowProducer({ connection });
-  }
-  return flowProducer;
 }
 
 // ---------------------------------------------------------------------------
@@ -141,95 +118,31 @@ export async function startCloneGenerationPipeline(
   const templateStructure =
     template.structure as ScriptJobData["templateStructure"];
 
-  // 5. Determine if we have talking_head scenes (need avatar)
-  const hasTalkingHead = scenes.some((s) => s.type === "talking_head");
-  const videoType = "CLONED" as const;
-
-  // 6. Build the BullMQ flow
-  // Pipeline: scrape -> script -> tts -> avatar -> compose
-  const flow = getFlowProducer();
-
-  const scraperData = {
+  // 5. Send first pipeline job (scraper) with pipeline metadata
+  const jobId = await sendJob(QUEUE_NAMES.SCRAPER, {
     productUrl: productUrl ?? "",
     productId,
     orgId,
-  };
-
-  const scriptData: ScriptJobData = {
-    videoId,
-    productData: {
-      title: "",
-      description: "",
-      images: [],
-      price: null,
-      reviews: [],
+    _pipeline: {
+      videoId,
+      productUrl: productUrl ?? "",
+      productId,
+      orgId,
+      videoType: "CLONED" as const,
+      voiceId,
+      avatarId,
+      brandKitId,
+      templateId,
+      brandKit,
+      templateStructure,
     },
-    videoType,
-    brandKit,
-    templateStructure,
-  };
-
-  const ttsData: TTSJobData = {
-    videoId,
-    scenes: [],
-    voiceId,
-  };
-
-  const avatarData: AvatarJobData = {
-    videoId,
-    script: "",
-    audioUrl: "",
-    avatarId: avatarId ?? "",
-    videoType,
-  };
-
-  const composerData: ComposerJobData = {
-    videoId,
-    audioUrls: [],
-    avatarVideoUrl: hasTalkingHead ? null : null,
-    productImages: [],
-    script: { type: videoType },
-  };
-
-  const jobTree = await flow.add({
-    name: `compose-${videoId}`,
-    queueName: "composer",
-    data: composerData,
-    children: [
-      {
-        name: `avatar-${videoId}`,
-        queueName: "avatar",
-        data: avatarData,
-        children: [
-          {
-            name: `tts-${videoId}`,
-            queueName: "tts",
-            data: ttsData,
-            children: [
-              {
-                name: `script-${videoId}`,
-                queueName: "script",
-                data: scriptData,
-                children: [
-                  {
-                    name: `scrape-${videoId}`,
-                    queueName: "scraper",
-                    data: scraperData,
-                  },
-                ],
-              },
-            ],
-          },
-        ],
-      },
-    ],
   });
 
   console.log(
-    `[clone-pipeline] Generation flow created for video ${videoId}`
+    `[clone-pipeline] First job sent for video ${videoId}`
   );
 
-  return jobTree.job.id ?? videoId;
+  return jobId ?? videoId;
 }
 
 // ---------------------------------------------------------------------------
@@ -251,15 +164,4 @@ export async function startBatchCloneGeneration(
   );
 
   return jobIds;
-}
-
-// ---------------------------------------------------------------------------
-// Cleanup
-// ---------------------------------------------------------------------------
-
-export async function closeClonePipeline(): Promise<void> {
-  if (flowProducer) {
-    await flowProducer.close();
-    flowProducer = null;
-  }
 }

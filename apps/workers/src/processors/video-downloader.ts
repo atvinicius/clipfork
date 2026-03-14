@@ -1,4 +1,3 @@
-import { Job } from "bullmq";
 import { execFile } from "child_process";
 import { v4 as uuidv4 } from "uuid";
 import { uploadToR2 } from "../lib/r2";
@@ -124,7 +123,7 @@ async function downloadWithRapidAPI(url: string): Promise<Buffer> {
 // ---------------------------------------------------------------------------
 
 export async function processVideoDownloaderJob(
-  job: Job<VideoDownloaderJobData>
+  job: { data: VideoDownloaderJobData }
 ): Promise<VideoDownloaderResult> {
   const { url, orgId } = job.data;
 

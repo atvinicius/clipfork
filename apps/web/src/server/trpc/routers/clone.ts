@@ -6,6 +6,7 @@ import {
   canAfford,
   type SceneType,
 } from "@ugc/shared";
+import { sendJob } from "../../queue";
 
 export const cloneRouter = router({
   // ---------------------------------------------------------------------------
@@ -18,28 +19,25 @@ export const cloneRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const { cloneDownloadQueue, cloneAnalyzeQueue } = await createQueuesFromRedis();
-
       const orgId = ctx.org.id;
 
-      // Step 1: Enqueue download job
-      const downloadJob = await cloneDownloadQueue.add("download", {
+      // Enqueue download job
+      const jobId = await sendJob("clone-download", {
         url: input.url,
         orgId,
       });
 
-      // Step 2: Enqueue analysis job (will wait for download in practice,
-      // but we use the download job ID so the client can poll)
-      await cloneAnalyzeQueue.add("analyze", {
+      // Enqueue analysis job
+      await sendJob("clone-analyze", {
         videoUrl: "",
         videoKey: "",
         sourceUrl: input.url,
         orgId,
-        downloadJobId: downloadJob.id,
+        downloadJobId: jobId,
       });
 
       return {
-        jobId: downloadJob.id ?? "unknown",
+        jobId: jobId ?? "unknown",
         status: "queued",
       };
     }),
@@ -144,8 +142,7 @@ export const cloneRouter = router({
         }),
       ]);
 
-      // 5. TODO: enqueue to clone generation pipeline via BullMQ
-      // In production this would call startCloneGenerationPipeline()
+      // 5. TODO: enqueue to clone generation pipeline
 
       return {
         videoId: video.id,
@@ -254,22 +251,3 @@ export const cloneRouter = router({
       };
     }),
 });
-
-// ---------------------------------------------------------------------------
-// Fallback queue creation (when workers package isn't directly importable)
-// ---------------------------------------------------------------------------
-
-async function createQueuesFromRedis() {
-  const { Queue } = await import("bullmq");
-  const IORedis = (await import("ioredis")).default;
-
-  const url = process.env.REDIS_URL ?? "redis://localhost:6379";
-  const connection = new IORedis(url, {
-    maxRetriesPerRequest: null,
-  }) as unknown as import("bullmq").ConnectionOptions;
-
-  return {
-    cloneDownloadQueue: new Queue("clone-download", { connection }),
-    cloneAnalyzeQueue: new Queue("clone-analyze", { connection }),
-  };
-}

@@ -1,15 +1,10 @@
-import { FlowProducer, type ConnectionOptions } from "bullmq";
 import { prisma } from "@ugc/db";
 import {
   calculateVideoCredits,
   calculateClonedVideoCredits,
 } from "@ugc/shared";
-import { createRedisConnection } from "../connection";
-import type { ScraperJobData } from "./scraper";
+import { sendJob, QUEUE_NAMES } from "../queues";
 import type { ScriptJobData } from "./script-generator";
-import type { TTSJobData } from "./tts";
-import type { AvatarJobData } from "./avatar";
-import type { ComposerJobData } from "./composer";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -28,20 +23,6 @@ export interface PipelineOptions {
 }
 
 // ---------------------------------------------------------------------------
-// Flow producer singleton
-// ---------------------------------------------------------------------------
-
-let flowProducer: FlowProducer | null = null;
-
-function getFlowProducer(): FlowProducer {
-  if (!flowProducer) {
-    const connection = createRedisConnection() as unknown as ConnectionOptions;
-    flowProducer = new FlowProducer({ connection });
-  }
-  return flowProducer;
-}
-
-// ---------------------------------------------------------------------------
 // Credit calculation
 // ---------------------------------------------------------------------------
 
@@ -50,7 +31,6 @@ async function calculateCreditsForVideo(
   templateId?: string
 ): Promise<number> {
   if (videoType === "CLONED" && templateId) {
-    // For cloned videos, we need the template structure to calculate credits
     const template = await prisma.template.findUnique({
       where: { id: templateId },
     });
@@ -75,12 +55,11 @@ async function calculateCreditsForVideo(
     }
   }
 
-  // Default: estimate based on a 15-second video
   return calculateVideoCredits(videoType, 15);
 }
 
 // ---------------------------------------------------------------------------
-// Start pipeline
+// Start pipeline — deducts credits, sends first job (scraper)
 // ---------------------------------------------------------------------------
 
 export async function startVideoPipeline(
@@ -113,7 +92,6 @@ export async function startVideoPipeline(
     );
   }
 
-  // Deduct credits atomically
   await prisma.$transaction([
     prisma.organization.update({
       where: { id: orgId },
@@ -167,102 +145,30 @@ export async function startVideoPipeline(
     }
   }
 
-  // 4. Create the BullMQ flow
-  // Pipeline: scrape -> script -> [tts + avatar] -> compose
-  //
-  // BullMQ FlowProducer creates a DAG where children must complete before
-  // the parent job starts. We model the pipeline bottom-up:
-  //
-  //   compose (root)
-  //     <- avatar (depends on tts completing)
-  //     <- tts (depends on script completing)
-  //       <- script (depends on scrape completing)
-  //         <- scrape (leaf)
-
-  const flow = getFlowProducer();
-
-  const scraperData: ScraperJobData = {
+  // 4. Send the first pipeline job (scraper) with pipeline metadata
+  //    The index.ts worker wrapper chains subsequent steps on completion.
+  const jobId = await sendJob(QUEUE_NAMES.SCRAPER, {
     productUrl,
     productId,
     orgId,
-  };
-
-  // We pass placeholder data that will be enriched by the pipeline event
-  // handlers. BullMQ FlowProducer does not natively support passing results
-  // between jobs — the workers themselves read from DB and pass data forward.
-  const scriptData: ScriptJobData = {
-    videoId,
-    productData: {
-      title: "",
-      description: "",
-      images: [],
-      price: null,
-      reviews: [],
+    _pipeline: {
+      videoId,
+      productUrl,
+      productId,
+      orgId,
+      videoType,
+      voiceId,
+      avatarId,
+      brandKitId,
+      templateId,
+      brandKit,
+      templateStructure,
     },
-    videoType,
-    brandKit,
-    templateStructure,
-  };
-
-  const ttsData: TTSJobData = {
-    videoId,
-    scenes: [],
-    voiceId,
-  };
-
-  const avatarData: AvatarJobData = {
-    videoId,
-    script: "",
-    audioUrl: "",
-    avatarId: avatarId ?? "",
-    videoType,
-  };
-
-  const composerData: ComposerJobData = {
-    videoId,
-    audioUrls: [],
-    avatarVideoUrl: null,
-    productImages: [],
-    script: { type: videoType },
-  };
-
-  const jobTree = await flow.add({
-    name: `compose-${videoId}`,
-    queueName: "composer",
-    data: composerData,
-    children: [
-      {
-        name: `avatar-${videoId}`,
-        queueName: "avatar",
-        data: avatarData,
-        children: [
-          {
-            name: `tts-${videoId}`,
-            queueName: "tts",
-            data: ttsData,
-            children: [
-              {
-                name: `script-${videoId}`,
-                queueName: "script",
-                data: scriptData,
-                children: [
-                  {
-                    name: `scrape-${videoId}`,
-                    queueName: "scraper",
-                    data: scraperData,
-                  },
-                ],
-              },
-            ],
-          },
-        ],
-      },
-    ],
   });
 
-  console.log(`[pipeline] Flow created for video ${videoId}`);
+  console.log(`[pipeline] First job sent for video ${videoId}`);
 
-  return jobTree.job.id ?? videoId;
+  return jobId ?? videoId;
 }
 
 // ---------------------------------------------------------------------------
@@ -278,7 +184,6 @@ export async function handlePipelineFailure(
   console.error(`[pipeline] Pipeline failed for video ${videoId}: ${errorMessage}`);
 
   try {
-    // Get the video to find org and credits used
     const video = await prisma.video.findUnique({
       where: { id: videoId },
     });
@@ -289,7 +194,6 @@ export async function handlePipelineFailure(
     }
 
     if (video.creditsUsed > 0) {
-      // Refund credits
       await prisma.$transaction([
         prisma.organization.update({
           where: { id: video.orgId },
@@ -310,7 +214,6 @@ export async function handlePipelineFailure(
       );
     }
 
-    // Update video status
     await prisma.video.update({
       where: { id: videoId },
       data: {
@@ -323,16 +226,5 @@ export async function handlePipelineFailure(
       `[pipeline] Failed to handle pipeline failure for ${videoId}:`,
       refundError
     );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Cleanup
-// ---------------------------------------------------------------------------
-
-export async function closePipeline(): Promise<void> {
-  if (flowProducer) {
-    await flowProducer.close();
-    flowProducer = null;
   }
 }

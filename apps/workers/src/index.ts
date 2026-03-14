@@ -1,145 +1,212 @@
-import { Worker, Queue, type ConnectionOptions } from "bullmq";
-import { createRedisConnection } from "./connection";
+import { startBoss, stopBoss } from "./boss";
+import { QUEUE_NAMES, sendJob } from "./queues";
 import { processScraperJob } from "./processors/scraper";
 import { processScriptJob } from "./processors/script-generator";
 import { processTTSJob } from "./processors/tts";
 import { processAvatarJob } from "./processors/avatar";
 import { processComposerJob } from "./processors/composer";
-import { handlePipelineFailure, closePipeline } from "./processors/pipeline";
+import { handlePipelineFailure } from "./processors/pipeline";
 import { processVideoDownloaderJob } from "./processors/video-downloader";
 import { processCloneAnalyzerJob } from "./processors/clone-analyzer";
-import { closeClonePipeline } from "./processors/clone-pipeline";
 import { processMonitorJob } from "./processors/monitor";
 import { processPublishJob } from "./processors/publisher";
 import { processSchedulerJob } from "./processors/scheduler";
+import type { ScriptJobData } from "./processors/script-generator";
+import type { TTSJobData } from "./processors/tts";
+import type { AvatarJobData } from "./processors/avatar";
+import type { ComposerJobData } from "./processors/composer";
+
+// ---------------------------------------------------------------------------
+// Pipeline step definitions for job chaining
+// ---------------------------------------------------------------------------
+
+interface PipelineMeta {
+  videoId: string;
+  productUrl: string;
+  productId: string;
+  orgId: string;
+  videoType: "TALKING_HEAD" | "FACELESS" | "CLONED";
+  voiceId: string;
+  avatarId?: string;
+  brandKitId?: string;
+  templateId?: string;
+  brandKit: ScriptJobData["brandKit"];
+  templateStructure: ScriptJobData["templateStructure"];
+}
+
+async function chainNextPipelineStep(
+  currentQueue: string,
+  pipeline: PipelineMeta
+): Promise<void> {
+  const { videoId, voiceId, avatarId, videoType } = pipeline;
+
+  switch (currentQueue) {
+    case QUEUE_NAMES.SCRAPER:
+      await sendJob(QUEUE_NAMES.SCRIPT, {
+        videoId,
+        productData: { title: "", description: "", images: [], price: null, reviews: [] },
+        videoType,
+        brandKit: pipeline.brandKit,
+        templateStructure: pipeline.templateStructure,
+        _pipeline: pipeline,
+      } satisfies ScriptJobData & { _pipeline: PipelineMeta });
+      break;
+
+    case QUEUE_NAMES.SCRIPT:
+      await sendJob(QUEUE_NAMES.TTS, {
+        videoId,
+        scenes: [],
+        voiceId,
+        _pipeline: pipeline,
+      } satisfies TTSJobData & { _pipeline: PipelineMeta });
+      break;
+
+    case QUEUE_NAMES.TTS:
+      await sendJob(QUEUE_NAMES.AVATAR, {
+        videoId,
+        script: "",
+        audioUrl: "",
+        avatarId: avatarId ?? "",
+        videoType,
+        _pipeline: pipeline,
+      } satisfies AvatarJobData & { _pipeline: PipelineMeta });
+      break;
+
+    case QUEUE_NAMES.AVATAR:
+      await sendJob(QUEUE_NAMES.COMPOSER, {
+        videoId,
+        audioUrls: [],
+        avatarVideoUrl: null,
+        productImages: [],
+        script: { type: videoType },
+      } satisfies ComposerJobData);
+      break;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Main
+// ---------------------------------------------------------------------------
 
 async function main() {
-  const redis = createRedisConnection();
-  const connection = redis as unknown as ConnectionOptions;
+  const boss = await startBoss();
 
-  console.log("Workers starting...");
-
-  // -------------------------------------------------------------------
-  // Register workers with concurrency settings
-  // -------------------------------------------------------------------
-
-  const scraperWorker = new Worker("scraper", processScraperJob, {
-    connection,
-    concurrency: 5,
-  });
-
-  const scriptWorker = new Worker("script", processScriptJob, {
-    connection,
-    concurrency: 3,
-  });
-
-  const ttsWorker = new Worker("tts", processTTSJob, {
-    connection,
-    concurrency: 5,
-  });
-
-  const avatarWorker = new Worker("avatar", processAvatarJob, {
-    connection,
-    concurrency: 3,
-  });
-
-  const composerWorker = new Worker("composer", processComposerJob, {
-    connection,
-    concurrency: 2,
-  });
-
-  const videoDownloaderWorker = new Worker(
-    "clone-download",
-    processVideoDownloaderJob,
-    { connection, concurrency: 3 }
-  );
-
-  const cloneAnalyzerWorker = new Worker(
-    "clone-analyze",
-    processCloneAnalyzerJob,
-    { connection, concurrency: 2 }
-  );
-
-  const monitorWorker = new Worker("monitor", processMonitorJob, {
-    connection,
-    concurrency: 2,
-  });
-
-  const publisherWorker = new Worker("publish", processPublishJob, {
-    connection,
-    concurrency: 2,
-  });
-
-  const schedulerWorker = new Worker("scheduler", processSchedulerJob, {
-    connection,
-    concurrency: 1,
-  });
-
-  const workers = [
-    scraperWorker,
-    scriptWorker,
-    ttsWorker,
-    avatarWorker,
-    composerWorker,
-    videoDownloaderWorker,
-    cloneAnalyzerWorker,
-    monitorWorker,
-    publisherWorker,
-    schedulerWorker,
-  ];
+  console.log("Workers starting with pg-boss...");
 
   // -------------------------------------------------------------------
-  // Set up scheduler repeatable job (every minute)
+  // Pipeline workers — with job chaining on success
   // -------------------------------------------------------------------
 
-  const schedulerQueue = new Queue("scheduler", { connection });
-  await schedulerQueue.upsertJobScheduler(
-    "scheduler-cron",
-    { pattern: "* * * * *" },
-    {
-      name: "scheduled-publish-check",
-      data: { _trigger: "cron" as const },
+  const pipelineQueues = [
+    QUEUE_NAMES.SCRAPER,
+    QUEUE_NAMES.SCRIPT,
+    QUEUE_NAMES.TTS,
+    QUEUE_NAMES.AVATAR,
+  ] as const;
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const processors: Record<string, (job: { data: any }) => Promise<any>> = {
+    [QUEUE_NAMES.SCRAPER]: processScraperJob,
+    [QUEUE_NAMES.SCRIPT]: processScriptJob,
+    [QUEUE_NAMES.TTS]: processTTSJob,
+    [QUEUE_NAMES.AVATAR]: processAvatarJob,
+  };
+
+  for (const queueName of pipelineQueues) {
+    const processor = processors[queueName]!;
+
+    await boss.work(
+      queueName,
+      { localConcurrency: queueName === QUEUE_NAMES.SCRAPER ? 5 : 3 },
+      async (jobs) => {
+        const job = jobs[0];
+        try {
+          await processor(job);
+
+          // Chain next pipeline step if this job is part of a pipeline
+          const pipeline = (job.data as Record<string, unknown>)?._pipeline as PipelineMeta | undefined;
+          if (pipeline) {
+            await chainNextPipelineStep(queueName, pipeline);
+          }
+        } catch (error) {
+          // Handle pipeline failure (refund credits)
+          const data = job.data as Record<string, unknown>;
+          const pipeline = data?._pipeline as PipelineMeta | undefined;
+          const videoId = pipeline?.videoId ?? (data?.videoId as string | undefined);
+          if (videoId) {
+            await handlePipelineFailure(videoId, error instanceof Error ? error : new Error(String(error)));
+          }
+          throw error;
+        }
+      }
+    );
+  }
+
+  // Composer — end of pipeline, no chaining needed
+  await boss.work(
+    QUEUE_NAMES.COMPOSER,
+    { localConcurrency: 2 },
+    async (jobs) => {
+      const job = jobs[0];
+      try {
+        await processComposerJob(job as any);
+      } catch (error) {
+        const data = job.data as Record<string, unknown>;
+        const videoId = data?.videoId as string | undefined;
+        if (videoId) {
+          await handlePipelineFailure(videoId, error instanceof Error ? error : new Error(String(error)));
+        }
+        throw error;
+      }
     }
   );
 
-  console.log("Scheduler repeatable job registered (every minute)");
-
   // -------------------------------------------------------------------
-  // Error & failure event handlers
+  // Non-pipeline workers
   // -------------------------------------------------------------------
 
-  for (const worker of workers) {
-    worker.on("completed", (job) => {
-      console.log(`[${worker.name}] Job ${job.id} completed`);
-    });
+  await boss.work(
+    QUEUE_NAMES.CLONE_DOWNLOAD,
+    { localConcurrency: 3 },
+    async (jobs) => { await processVideoDownloaderJob(jobs[0] as any); }
+  );
 
-    worker.on("failed", async (job, err) => {
-      console.error(`[${worker.name}] Job ${job?.id} failed:`, err.message);
+  await boss.work(
+    QUEUE_NAMES.CLONE_ANALYZE,
+    { localConcurrency: 2 },
+    async (jobs) => { await processCloneAnalyzerJob(jobs[0] as any); }
+  );
 
-      // Attempt pipeline-level failure handling for video pipeline jobs
-      const data = job?.data as Record<string, unknown> | undefined;
-      const videoId =
-        (data?.videoId as string | undefined) ??
-        job?.name?.split("-").slice(1).join("-");
-      if (
-        videoId &&
-        ["scraper", "script", "tts", "avatar", "composer"].includes(
-          worker.name
-        )
-      ) {
-        await handlePipelineFailure(videoId, err);
-      }
-    });
+  await boss.work(
+    QUEUE_NAMES.MONITOR,
+    { localConcurrency: 2 },
+    async (jobs) => { await processMonitorJob(jobs[0] as any); }
+  );
 
-    worker.on("error", (err) => {
-      console.error(`[${worker.name}] Worker error:`, err.message);
-    });
-  }
+  await boss.work(
+    QUEUE_NAMES.PUBLISH,
+    { localConcurrency: 2 },
+    async (jobs) => { await processPublishJob(jobs[0] as any); }
+  );
+
+  await boss.work(
+    QUEUE_NAMES.SCHEDULER,
+    { localConcurrency: 1 },
+    async (jobs) => { await processSchedulerJob(jobs[0] as any); }
+  );
+
+  // -------------------------------------------------------------------
+  // Scheduler cron — check for scheduled publishes every minute
+  // -------------------------------------------------------------------
+
+  await boss.schedule(QUEUE_NAMES.SCHEDULER, "* * * * *", {
+    _trigger: "cron",
+  });
 
   console.log("Workers registered:");
   console.log("  - scraper          (concurrency: 5)");
   console.log("  - script           (concurrency: 3)");
-  console.log("  - tts              (concurrency: 5)");
+  console.log("  - tts              (concurrency: 3)");
   console.log("  - avatar           (concurrency: 3)");
   console.log("  - composer         (concurrency: 2)");
   console.log("  - clone-download   (concurrency: 3)");
@@ -147,7 +214,7 @@ async function main() {
   console.log("  - monitor          (concurrency: 2)");
   console.log("  - publish          (concurrency: 2)");
   console.log("  - scheduler        (concurrency: 1, cron: every minute)");
-  console.log("Workers ready and listening for jobs...");
+  console.log("Workers ready and listening for jobs via pg-boss...");
 
   // -------------------------------------------------------------------
   // Graceful shutdown
@@ -155,13 +222,7 @@ async function main() {
 
   const shutdown = async () => {
     console.log("Shutting down workers...");
-
-    await Promise.all(workers.map((w) => w.close()));
-    await schedulerQueue.close();
-    await closePipeline();
-    await closeClonePipeline();
-    await redis.quit();
-
+    await stopBoss();
     console.log("All workers shut down.");
     process.exit(0);
   };

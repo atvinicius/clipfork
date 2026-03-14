@@ -1,4 +1,3 @@
-import { Job } from "bullmq";
 import OpenAI from "openai";
 import { prisma } from "@ugc/db";
 import { templateStructureSchema } from "@ugc/shared";
@@ -147,7 +146,7 @@ function parseJsonFromResponse(text: string): unknown {
 // ---------------------------------------------------------------------------
 
 export async function processCloneAnalyzerJob(
-  job: Job<CloneAnalyzerJobData>
+  job: { data: CloneAnalyzerJobData }
 ): Promise<CloneAnalyzerResult> {
   const { videoKey, sourceUrl, orgId } = job.data;
 

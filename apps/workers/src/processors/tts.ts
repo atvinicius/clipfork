@@ -1,4 +1,3 @@
-import { Job } from "bullmq";
 import { ElevenLabsClient } from "elevenlabs";
 import { prisma } from "@ugc/db";
 import { uploadToR2 } from "../lib/r2";
@@ -54,7 +53,7 @@ async function streamToBuffer(
 // Processor
 // ---------------------------------------------------------------------------
 
-export async function processTTSJob(job: Job<TTSJobData>) {
+export async function processTTSJob(job: { data: TTSJobData }) {
   const { videoId, scenes, voiceId } = job.data;
 
   console.log(
@@ -82,8 +81,6 @@ export async function processTTSJob(job: Job<TTSJobData>) {
       console.log(
         `[tts] Generating audio for scene ${i + 1}/${scenes.length}: "${scene.text.substring(0, 50)}..."`
       );
-
-      await job.updateProgress(Math.round(((i + 1) / scenes.length) * 100));
 
       // Generate audio with ElevenLabs
       const audioStream = await client.textToSpeech.convert(voiceId, {

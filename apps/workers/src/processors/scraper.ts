@@ -1,4 +1,3 @@
-import { Job } from "bullmq";
 import Firecrawl from "@mendable/firecrawl-js";
 import * as cheerio from "cheerio";
 import { v4 as uuidv4 } from "uuid";
@@ -223,7 +222,7 @@ async function uploadProductImages(
 // Processor
 // ---------------------------------------------------------------------------
 
-export async function processScraperJob(job: Job<ScraperJobData>) {
+export async function processScraperJob(job: { data: ScraperJobData }) {
   const { productUrl, productId, orgId } = job.data;
 
   console.log(`[scraper] Starting scrape for product ${productId}: ${productUrl}`);

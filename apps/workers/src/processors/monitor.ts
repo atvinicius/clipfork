@@ -1,7 +1,6 @@
-import { Job } from "bullmq";
 import { ApifyClient } from "apify-client";
 import { prisma } from "@ugc/db";
-import { cloneQueue } from "../queues";
+import { sendJob, QUEUE_NAMES } from "../queues";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -135,7 +134,7 @@ function calculateEngagementRate(post: ParsedPost): number {
 // Processor
 // ---------------------------------------------------------------------------
 
-export async function processMonitorJob(job: Job<MonitorJobData>) {
+export async function processMonitorJob(job: { data: MonitorJobData }) {
   const { watchId } = job.data;
 
   console.log(`[monitor] Processing watch ${watchId}`);
@@ -248,7 +247,7 @@ export async function processMonitorJob(job: Job<MonitorJobData>) {
         console.log(
           `[monitor] Outlier detected: ${post.url} (engagement: ${post.engagementRate.toFixed(2)}%, avg: ${overallAvg.toFixed(2)}%)`
         );
-        await cloneQueue.add(`clone-analyze-${post.id}`, {
+        await sendJob(QUEUE_NAMES.CLONE, {
           postId: post.id,
           postUrl: post.url,
           watchId: watch.id,

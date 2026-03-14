@@ -1,4 +1,3 @@
-import { Job } from "bullmq";
 import OpenAI from "openai";
 import { prisma } from "@ugc/db";
 
@@ -247,7 +246,7 @@ function parseJsonFromResponse(text: string): unknown {
 // Processor
 // ---------------------------------------------------------------------------
 
-export async function processScriptJob(job: Job<ScriptJobData>) {
+export async function processScriptJob(job: { data: ScriptJobData }) {
   const { videoId, productData, videoType, brandKit, templateStructure } =
     job.data;
 

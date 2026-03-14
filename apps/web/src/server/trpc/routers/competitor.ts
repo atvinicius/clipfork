@@ -1,26 +1,7 @@
 import { z } from "zod";
 import { router, protectedProcedure } from "../init";
 import { TRPCError } from "@trpc/server";
-import { Queue } from "bullmq";
-import IORedis from "ioredis";
-
-function getMonitorQueue() {
-  const redis = new IORedis(process.env.REDIS_URL ?? "redis://localhost:6379", {
-    maxRetriesPerRequest: null,
-  });
-  return new Queue("monitor", {
-    connection: redis as unknown as import("bullmq").ConnectionOptions,
-  });
-}
-
-function getCloneQueue() {
-  const redis = new IORedis(process.env.REDIS_URL ?? "redis://localhost:6379", {
-    maxRetriesPerRequest: null,
-  });
-  return new Queue("clone", {
-    connection: redis as unknown as import("bullmq").ConnectionOptions,
-  });
-}
+import { sendJob } from "../../queue";
 
 export const competitorRouter = router({
   createWatch: protectedProcedure
@@ -191,7 +172,6 @@ export const competitorRouter = router({
         nextCursor = next?.id;
       }
 
-      // Return flattened shape expected by the UI
       return posts.map((p) => ({
         id: p.id,
         url: p.url,
@@ -221,9 +201,7 @@ export const competitorRouter = router({
         });
       }
 
-      const queue = getMonitorQueue();
-      await queue.add(`scan-${watch.id}`, { watchId: watch.id });
-      await queue.close();
+      await sendJob("monitor", { watchId: watch.id });
 
       return { queued: true };
     }),
@@ -246,14 +224,12 @@ export const competitorRouter = router({
         });
       }
 
-      const queue = getCloneQueue();
-      await queue.add(`clone-${post.id}`, {
+      await sendJob("clone", {
         postId: post.id,
         postUrl: post.url,
         watchId: post.watchId,
         orgId: ctx.org.id,
       });
-      await queue.close();
 
       return { queued: true };
     }),
