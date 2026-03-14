@@ -1,7 +1,7 @@
-import { Queue } from "bullmq";
+import { Queue, type ConnectionOptions } from "bullmq";
 import { createRedisConnection } from "./connection";
 
-const connection = createRedisConnection();
+const connection = createRedisConnection() as unknown as ConnectionOptions;
 
 export const videoQueue = new Queue("video", { connection });
 export const cloneQueue = new Queue("clone", { connection });
