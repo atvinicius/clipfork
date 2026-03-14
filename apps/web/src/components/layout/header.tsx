@@ -1,5 +1,12 @@
-import { UserButton } from "@clerk/nextjs";
+"use client";
+
+import dynamic from "next/dynamic";
 import { Badge } from "@/components/ui/badge";
+
+const UserButton = dynamic(
+  () => import("@clerk/nextjs").then((mod) => mod.UserButton),
+  { ssr: false }
+);
 
 export function Header({ creditsBalance }: { creditsBalance?: number }) {
   return (
@@ -7,7 +14,7 @@ export function Header({ creditsBalance }: { creditsBalance?: number }) {
       <div />
       <div className="flex items-center gap-4">
         {creditsBalance !== undefined && (
-          <Badge className="bg-[#7C3AED] text-white hover:bg-[#7C3AED]/90 text-sm">
+          <Badge variant="secondary" className="text-sm">
             {creditsBalance} credits
           </Badge>
         )}

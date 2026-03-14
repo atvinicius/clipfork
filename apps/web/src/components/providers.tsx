@@ -7,7 +7,7 @@ import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import superjson from "superjson";
 
-export function Providers({ children }: { children: React.ReactNode }) {
+function TRPCProviders({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(() => new QueryClient());
   const [trpcClient] = useState(() =>
     trpc.createClient({
@@ -21,12 +21,24 @@ export function Providers({ children }: { children: React.ReactNode }) {
   );
 
   return (
+    <trpc.Provider client={trpcClient} queryClient={queryClient}>
+      <QueryClientProvider client={queryClient}>
+        {children}
+      </QueryClientProvider>
+    </trpc.Provider>
+  );
+}
+
+export function Providers({ children }: { children: React.ReactNode }) {
+  const hasClerkKey = !!process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+
+  if (!hasClerkKey) {
+    return <TRPCProviders>{children}</TRPCProviders>;
+  }
+
+  return (
     <ClerkProvider>
-      <trpc.Provider client={trpcClient} queryClient={queryClient}>
-        <QueryClientProvider client={queryClient}>
-          {children}
-        </QueryClientProvider>
-      </trpc.Provider>
+      <TRPCProviders>{children}</TRPCProviders>
     </ClerkProvider>
   );
 }
