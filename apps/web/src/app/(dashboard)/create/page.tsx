@@ -12,7 +12,6 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -24,16 +23,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 
-type VideoType = "TALKING_HEAD" | "FACELESS";
-
-const PLACEHOLDER_AVATARS = [
-  { id: "avatar-1", name: "Sarah", thumbnail: null },
-  { id: "avatar-2", name: "James", thumbnail: null },
-  { id: "avatar-3", name: "Maria", thumbnail: null },
-  { id: "avatar-4", name: "Alex", thumbnail: null },
-  { id: "avatar-5", name: "Priya", thumbnail: null },
-  { id: "avatar-6", name: "Lucas", thumbnail: null },
-];
+type VideoType = "VOICEOVER" | "FACELESS";
 
 const PLACEHOLDER_VOICES = [
   { id: "voice-1", name: "Confident Female" },
@@ -49,7 +39,6 @@ export default function CreateVideoPage() {
   const [productUrl, setProductUrl] = useState("");
   const [selectedProductId, setSelectedProductId] = useState<string>("");
   const [videoType, setVideoType] = useState<VideoType | null>(null);
-  const [selectedAvatar, setSelectedAvatar] = useState<string>("");
   const [selectedVoice, setSelectedVoice] = useState<string>("");
   const [script, setScript] = useState(
     "Hey everyone! I just tried this amazing product and I have to tell you about it...\n\nThe quality is incredible, and the price point is perfect for anyone looking to upgrade their routine.\n\nSeriously, if you haven't tried this yet, you're missing out. Link in bio!"
@@ -67,7 +56,7 @@ export default function CreateVideoPage() {
     (p) => p.id === selectedProductId
   );
 
-  const estimatedCredits = videoType === "TALKING_HEAD" ? 1 : videoType === "FACELESS" ? 1 : 0;
+  const estimatedCredits = 1;
 
   function handleNext() {
     if (step < 4) setStep(step + 1);
@@ -82,7 +71,7 @@ export default function CreateVideoPage() {
       case 1:
         return selectedProductId || productUrl;
       case 2:
-        return videoType && (videoType === "FACELESS" || (selectedAvatar && selectedVoice));
+        return videoType && selectedVoice;
       case 3:
         return script.trim().length > 0;
       case 4:
@@ -105,9 +94,8 @@ export default function CreateVideoPage() {
       await createVideoMutation.mutateAsync({
         productId: selectedProductId || undefined,
         productUrl: productUrl || undefined,
-        videoType,
+        videoType: videoType === "VOICEOVER" ? "TALKING_HEAD" : "FACELESS",
         brandKitId: brandKitId || undefined,
-        avatarId: selectedAvatar || undefined,
         voiceId: selectedVoice || undefined,
       });
       setGenerationProgress(100);
@@ -155,7 +143,7 @@ export default function CreateVideoPage() {
         ))}
         <span className="ml-4 text-sm text-muted-foreground">
           {step === 1 && "Product"}
-          {step === 2 && "Format & Avatar"}
+          {step === 2 && "Format & Voice"}
           {step === 3 && "Script Review"}
           {step === 4 && "Generate"}
         </span>
@@ -262,28 +250,28 @@ export default function CreateVideoPage() {
         </div>
       )}
 
-      {/* Step 2: Format & Avatar */}
+      {/* Step 2: Format & Voice */}
       {step === 2 && (
         <div className="space-y-6">
           <div className="grid gap-4 sm:grid-cols-2">
             <Card
               className={`cursor-pointer transition-all hover:border-[#7C3AED]/50 ${
-                videoType === "TALKING_HEAD"
+                videoType === "VOICEOVER"
                   ? "border-[#7C3AED] ring-2 ring-[#7C3AED]/20"
                   : ""
               }`}
-              onClick={() => setVideoType("TALKING_HEAD")}
+              onClick={() => setVideoType("VOICEOVER")}
             >
               <CardContent className="p-6 text-center">
                 <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-2xl bg-[#7C3AED]/10 text-4xl">
-                  🎭
+                  🎙️
                 </div>
-                <h3 className="text-lg font-semibold">Talking Head</h3>
+                <h3 className="text-lg font-semibold">Voiceover</h3>
                 <p className="mt-2 text-sm text-muted-foreground">
-                  An AI avatar presents your product with natural-looking speech
-                  and gestures.
+                  Product footage with AI voiceover narration, text overlays,
+                  and trending music.
                 </p>
-                <Badge className="mt-3 bg-[#7C3AED]">1 credit / 15s</Badge>
+                <Badge className="mt-3 bg-[#7C3AED]">1 credit</Badge>
               </CardContent>
             </Card>
 
@@ -301,71 +289,39 @@ export default function CreateVideoPage() {
                 </div>
                 <h3 className="text-lg font-semibold">Faceless</h3>
                 <p className="mt-2 text-sm text-muted-foreground">
-                  Product B-roll with voiceover, text overlays, and
-                  transitions. No avatar needed.
+                  Product B-roll with captions, text overlays, and
+                  transitions. No voice needed.
                 </p>
-                <Badge className="mt-3 bg-[#7C3AED]">0.5 credits / 15s</Badge>
+                <Badge className="mt-3 bg-[#7C3AED]">1 credit</Badge>
               </CardContent>
             </Card>
           </div>
 
-          {videoType === "TALKING_HEAD" && (
-            <>
-              <Card>
-                <CardHeader>
-                  <CardTitle>Choose Avatar</CardTitle>
-                  <CardDescription>
-                    Select the AI presenter for your video.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-3 gap-3 sm:grid-cols-6">
-                    {PLACEHOLDER_AVATARS.map((avatar) => (
-                      <button
-                        key={avatar.id}
-                        onClick={() => setSelectedAvatar(avatar.id)}
-                        className={`flex flex-col items-center gap-2 rounded-xl border-2 p-3 transition-all hover:border-[#7C3AED]/50 ${
-                          selectedAvatar === avatar.id
-                            ? "border-[#7C3AED] bg-[#7C3AED]/5"
-                            : "border-transparent"
-                        }`}
-                      >
-                        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted text-xl">
-                          👤
-                        </div>
-                        <span className="text-xs font-medium">
-                          {avatar.name}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>Choose Voice</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <Select
-                    value={selectedVoice}
-                    onValueChange={(v) => setSelectedVoice(v ?? "")}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select a voice..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {PLACEHOLDER_VOICES.map((voice) => (
-                        <SelectItem key={voice.id} value={voice.id}>
-                          {voice.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </CardContent>
-              </Card>
-            </>
-          )}
+          <Card>
+            <CardHeader>
+              <CardTitle>Choose Voice</CardTitle>
+              <CardDescription>
+                Select an AI voice for narration{videoType === "FACELESS" ? " (optional for faceless)" : ""}.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Select
+                value={selectedVoice}
+                onValueChange={(v) => setSelectedVoice(v ?? "")}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a voice..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {PLACEHOLDER_VOICES.map((voice) => (
+                    <SelectItem key={voice.id} value={voice.id}>
+                      {voice.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </CardContent>
+          </Card>
 
           <Card>
             <CardHeader>
@@ -470,29 +426,16 @@ export default function CreateVideoPage() {
                 <div className="flex items-center justify-between rounded-lg border p-3">
                   <span className="text-sm text-muted-foreground">Format</span>
                   <Badge className="bg-[#7C3AED]">
-                    {videoType === "TALKING_HEAD"
-                      ? "Talking Head"
-                      : "Faceless"}
+                    {videoType === "VOICEOVER" ? "Voiceover" : "Faceless"}
                   </Badge>
                 </div>
-                {videoType === "TALKING_HEAD" && (
-                  <>
-                    <div className="flex items-center justify-between rounded-lg border p-3">
-                      <span className="text-sm text-muted-foreground">Avatar</span>
-                      <span className="text-sm font-medium">
-                        {PLACEHOLDER_AVATARS.find((a) => a.id === selectedAvatar)
-                          ?.name || "None"}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between rounded-lg border p-3">
-                      <span className="text-sm text-muted-foreground">Voice</span>
-                      <span className="text-sm font-medium">
-                        {PLACEHOLDER_VOICES.find((v) => v.id === selectedVoice)
-                          ?.name || "None"}
-                      </span>
-                    </div>
-                  </>
-                )}
+                <div className="flex items-center justify-between rounded-lg border p-3">
+                  <span className="text-sm text-muted-foreground">Voice</span>
+                  <span className="text-sm font-medium">
+                    {PLACEHOLDER_VOICES.find((v) => v.id === selectedVoice)
+                      ?.name || "None"}
+                  </span>
+                </div>
                 <div className="flex items-center justify-between rounded-lg border p-3">
                   <span className="text-sm text-muted-foreground">
                     Estimated Credits

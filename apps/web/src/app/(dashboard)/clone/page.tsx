@@ -58,15 +58,6 @@ interface AnalysisResult {
 // Constants
 // ---------------------------------------------------------------------------
 
-const PLACEHOLDER_AVATARS = [
-  { id: "avatar-1", name: "Sarah" },
-  { id: "avatar-2", name: "James" },
-  { id: "avatar-3", name: "Maria" },
-  { id: "avatar-4", name: "Alex" },
-  { id: "avatar-5", name: "Priya" },
-  { id: "avatar-6", name: "Lucas" },
-];
-
 const PLACEHOLDER_VOICES = [
   { id: "voice-1", name: "Confident Female" },
   { id: "voice-2", name: "Friendly Male" },
@@ -118,7 +109,6 @@ export default function CloneViralPage() {
 
   // Step 3: Customize & Generate
   const [selectedProductId, setSelectedProductId] = useState("");
-  const [selectedAvatar, setSelectedAvatar] = useState("");
   const [selectedVoice, setSelectedVoice] = useState("");
   const [brandKitId, setBrandKitId] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
@@ -296,7 +286,6 @@ export default function CloneViralPage() {
         templateId: analysisResult.jobId,
         productId: selectedProductId,
         voiceId: selectedVoice,
-        avatarId: selectedAvatar || undefined,
         brandKitId: brandKitId || undefined,
       });
 
@@ -312,7 +301,6 @@ export default function CloneViralPage() {
     analysisResult,
     selectedProductId,
     selectedVoice,
-    selectedAvatar,
     brandKitId,
     generateMutation,
     router,
@@ -785,36 +773,6 @@ export default function CloneViralPage() {
             </CardContent>
           </Card>
 
-          {/* Avatar Selection */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Choose Avatar</CardTitle>
-              <CardDescription>
-                Select the AI presenter for your cloned video.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-3 gap-3 sm:grid-cols-6">
-                {PLACEHOLDER_AVATARS.map((avatar) => (
-                  <button
-                    key={avatar.id}
-                    onClick={() => setSelectedAvatar(avatar.id)}
-                    className={`flex flex-col items-center gap-2 rounded-xl border-2 p-3 transition-all hover:border-[#7C3AED]/50 ${
-                      selectedAvatar === avatar.id
-                        ? "border-[#7C3AED] bg-[#7C3AED]/5"
-                        : "border-transparent"
-                    }`}
-                  >
-                    <div className="flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-[#1E1B4B] to-[#7C3AED]/60 text-sm font-bold text-white">
-                      {avatar.name.slice(0, 2).toUpperCase()}
-                    </div>
-                    <span className="text-xs font-medium">{avatar.name}</span>
-                  </button>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-
           {/* Voice Selection */}
           <Card>
             <CardHeader>
@@ -883,13 +841,6 @@ export default function CloneViralPage() {
                   <span className="text-sm text-muted-foreground">Product</span>
                   <span className="text-sm font-medium">
                     {selectedProduct?.name || "Not selected"}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between rounded-lg border bg-background p-3">
-                  <span className="text-sm text-muted-foreground">Avatar</span>
-                  <span className="text-sm font-medium">
-                    {PLACEHOLDER_AVATARS.find((a) => a.id === selectedAvatar)
-                      ?.name || "None"}
                   </span>
                 </div>
                 <div className="flex items-center justify-between rounded-lg border bg-background p-3">
