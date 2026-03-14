@@ -4,7 +4,14 @@
   "private": true,
   "main": "./src/index.ts",
   "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
   "scripts": {
+    "build": "tsc --module CommonJS --moduleResolution node --outDir dist --skipLibCheck --declaration false",
     "test": "vitest run",
     "test:watch": "vitest"
   },

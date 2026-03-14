@@ -22,8 +22,12 @@ COPY apps/workers/ apps/workers/
 # Generate Prisma client
 RUN cd packages/db && npx prisma generate
 
-# Build
+# Build all packages (db, shared, workers)
 RUN pnpm turbo build --filter=@ugc/workers...
+
+# Patch internal package main fields to point to compiled dist/
+RUN cd packages/db && node -e "const p=require('./package.json'); p.main='./dist/index.js'; require('fs').writeFileSync('package.json', JSON.stringify(p,null,2))"
+RUN cd packages/shared && node -e "const p=require('./package.json'); p.main='./dist/index.js'; delete p.exports; require('fs').writeFileSync('package.json', JSON.stringify(p,null,2))"
 
 WORKDIR /app/apps/workers
 
