@@ -18,7 +18,7 @@ export const cloneRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const { cloneDownloadQueue, cloneAnalyzeQueue } = createQueuesFromRedis();
+      const { cloneDownloadQueue, cloneAnalyzeQueue } = await createQueuesFromRedis();
 
       const orgId = ctx.org.id;
 

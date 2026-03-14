@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { Suspense, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
@@ -37,6 +37,14 @@ function getConnectionStatus(
 }
 
 export default function AccountsPage() {
+  return (
+    <Suspense fallback={<div className="animate-pulse p-8" />}>
+      <AccountsContent />
+    </Suspense>
+  );
+}
+
+function AccountsContent() {
   const searchParams = useSearchParams();
   const callbackCode = searchParams.get("code");
 

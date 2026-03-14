@@ -70,7 +70,7 @@ export const assetRouter = router({
           filename: input.filename,
           mimeType: input.mimeType,
           sizeBytes: input.sizeBytes,
-          metadata: input.metadata ?? {},
+          metadata: (input.metadata ?? {}) as Record<string, string>,
         },
       });
     }),

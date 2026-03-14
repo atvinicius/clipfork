@@ -581,7 +581,7 @@ export default function VideosPage() {
               ) : (
                 <Select
                   value={publishAccountId}
-                  onValueChange={setPublishAccountId}
+                  onValueChange={(v) => setPublishAccountId(v ?? "")}
                 >
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Select account..." />
@@ -690,7 +690,7 @@ export default function VideosPage() {
               ) : (
                 <Select
                   value={scheduleAccountId}
-                  onValueChange={setScheduleAccountId}
+                  onValueChange={(v) => setScheduleAccountId(v ?? "")}
                 >
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Select account..." />
