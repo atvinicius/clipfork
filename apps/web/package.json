@@ -24,6 +24,7 @@
     "react-dom": "^19",
     "stripe": "^17",
     "superjson": "^2",
+    "svix": "^1.88.0",
     "tailwind-merge": "^2",
     "zod": "^3",
     "zustand": "^5"
