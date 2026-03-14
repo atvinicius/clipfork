@@ -40,11 +40,12 @@ export function Sidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="flex h-screen w-64 flex-col border-r bg-white">
-      <div className="flex h-14 items-center px-4 font-semibold text-lg">
-        UGC Platform
+    <aside className="flex h-screen w-64 flex-col" style={{ backgroundColor: "#1E1B4B" }}>
+      <div className="flex h-14 items-center px-4 text-lg tracking-tight">
+        <span className="font-normal text-white">Clip</span>
+        <span className="font-bold text-white">Fork</span>
       </div>
-      <div className="mx-4 h-px bg-border" />
+      <div className="mx-4 h-px bg-white/10" />
       <nav className="flex-1 overflow-y-auto px-2 py-4">
         <ul className="space-y-1">
           {mainNav.map((item) => (
@@ -54,9 +55,10 @@ export function Sidebar() {
                 className={cn(
                   "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
                   pathname === item.href
-                    ? "bg-gray-100 text-gray-900"
-                    : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                    ? "text-white"
+                    : "text-white/60 hover:text-white hover:bg-white/5"
                 )}
+                style={pathname === item.href ? { backgroundColor: "#7C3AED" } : undefined}
               >
                 <item.icon className="h-4 w-4" />
                 {item.label}
@@ -65,7 +67,7 @@ export function Sidebar() {
           ))}
         </ul>
       </nav>
-      <div className="mx-4 h-px bg-border" />
+      <div className="mx-4 h-px bg-white/10" />
       <nav className="px-2 py-4">
         <ul className="space-y-1">
           {bottomNav.map((item) => (
@@ -75,9 +77,10 @@ export function Sidebar() {
                 className={cn(
                   "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
                   pathname === item.href
-                    ? "bg-gray-100 text-gray-900"
-                    : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                    ? "text-white"
+                    : "text-white/60 hover:text-white hover:bg-white/5"
                 )}
+                style={pathname === item.href ? { backgroundColor: "#7C3AED" } : undefined}
               >
                 <item.icon className="h-4 w-4" />
                 {item.label}

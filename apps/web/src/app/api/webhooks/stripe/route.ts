@@ -4,17 +4,23 @@ import Stripe from "stripe";
 import { prisma } from "@ugc/db";
 import { PLAN_CONFIGS, type Plan } from "@ugc/shared";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2025-02-24.acacia" as Stripe.LatestApiVersion,
-});
+function getStripe() {
+  return new Stripe(process.env.STRIPE_SECRET_KEY!, {
+    apiVersion: "2025-02-24.acacia" as Stripe.LatestApiVersion,
+  });
+}
 
-const PRICE_TO_PLAN: Record<string, Plan> = {
-  [process.env.STRIPE_STARTER_PRICE_ID!]: "STARTER",
-  [process.env.STRIPE_GROWTH_PRICE_ID!]: "GROWTH",
-  [process.env.STRIPE_SCALE_PRICE_ID!]: "SCALE",
-};
+function getPriceToPlan(): Record<string, Plan> {
+  return {
+    [process.env.STRIPE_STARTER_PRICE_ID!]: "STARTER",
+    [process.env.STRIPE_GROWTH_PRICE_ID!]: "GROWTH",
+    [process.env.STRIPE_SCALE_PRICE_ID!]: "SCALE",
+  };
+}
 
 export async function POST(req: Request) {
+  const stripe = getStripe();
+  const PRICE_TO_PLAN = getPriceToPlan();
   const body = await req.text();
   const headersList = await headers();
   const sig = headersList.get("stripe-signature")!;
