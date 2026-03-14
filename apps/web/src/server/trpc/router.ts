@@ -8,6 +8,8 @@ import { brandKitRouter } from "./routers/brandkit";
 import { assetRouter } from "./routers/asset";
 import { cloneRouter } from "./routers/clone";
 import { templateRouter } from "./routers/template";
+import { competitorRouter } from "./routers/competitor";
+import { tiktokRouter } from "./routers/tiktok";
 
 export const appRouter = router({
   org: orgRouter,
@@ -19,6 +21,8 @@ export const appRouter = router({
   asset: assetRouter,
   clone: cloneRouter,
   template: templateRouter,
+  competitor: competitorRouter,
+  tiktok: tiktokRouter,
 });
 
 export type AppRouter = typeof appRouter;
