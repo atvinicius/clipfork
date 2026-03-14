@@ -1,20 +1,107 @@
+import { Worker, type ConnectionOptions } from "bullmq";
 import { createRedisConnection } from "./connection";
+import { processScraperJob } from "./processors/scraper";
+import { processScriptJob } from "./processors/script-generator";
+import { processTTSJob } from "./processors/tts";
+import { processAvatarJob } from "./processors/avatar";
+import { processComposerJob } from "./processors/composer";
+import { handlePipelineFailure, closePipeline } from "./processors/pipeline";
 
 async function main() {
-  const connection = createRedisConnection();
+  const redis = createRedisConnection();
+  const connection = redis as unknown as ConnectionOptions;
 
   console.log("Workers starting...");
-  console.log("Redis connected:", connection.status);
 
-  // Workers will be registered here in Phase 2+
-  console.log("No processors registered yet (Phase 1 — infrastructure only)");
-  console.log("Workers idle, waiting for processor registration...");
+  // -------------------------------------------------------------------
+  // Register workers with concurrency settings
+  // -------------------------------------------------------------------
 
-  process.on("SIGTERM", async () => {
-    console.log("Shutting down workers...");
-    await connection.quit();
-    process.exit(0);
+  const scraperWorker = new Worker("scraper", processScraperJob, {
+    connection,
+    concurrency: 5,
   });
+
+  const scriptWorker = new Worker("script", processScriptJob, {
+    connection,
+    concurrency: 3,
+  });
+
+  const ttsWorker = new Worker("tts", processTTSJob, {
+    connection,
+    concurrency: 5,
+  });
+
+  const avatarWorker = new Worker("avatar", processAvatarJob, {
+    connection,
+    concurrency: 3,
+  });
+
+  const composerWorker = new Worker("composer", processComposerJob, {
+    connection,
+    concurrency: 2,
+  });
+
+  const workers = [
+    scraperWorker,
+    scriptWorker,
+    ttsWorker,
+    avatarWorker,
+    composerWorker,
+  ];
+
+  // -------------------------------------------------------------------
+  // Error & failure event handlers
+  // -------------------------------------------------------------------
+
+  for (const worker of workers) {
+    worker.on("completed", (job) => {
+      console.log(`[${worker.name}] Job ${job.id} completed`);
+    });
+
+    worker.on("failed", async (job, err) => {
+      console.error(`[${worker.name}] Job ${job?.id} failed:`, err.message);
+
+      // Attempt pipeline-level failure handling for video jobs
+      const data = job?.data as Record<string, unknown> | undefined;
+      const videoId =
+        (data?.videoId as string | undefined) ??
+        job?.name?.split("-").slice(1).join("-");
+      if (videoId) {
+        await handlePipelineFailure(videoId, err);
+      }
+    });
+
+    worker.on("error", (err) => {
+      console.error(`[${worker.name}] Worker error:`, err.message);
+    });
+  }
+
+  console.log("Workers registered:");
+  console.log("  - scraper    (concurrency: 5)");
+  console.log("  - script     (concurrency: 3)");
+  console.log("  - tts        (concurrency: 5)");
+  console.log("  - avatar     (concurrency: 3)");
+  console.log("  - composer   (concurrency: 2)");
+  console.log("Workers ready and listening for jobs...");
+
+  // -------------------------------------------------------------------
+  // Graceful shutdown
+  // -------------------------------------------------------------------
+
+  const shutdown = async () => {
+    console.log("Shutting down workers...");
+
+    await Promise.all(workers.map((w) => w.close()));
+    await closePipeline();
+    await redis.quit();
+
+    console.log("All workers shut down.");
+    process.exit(0);
+  };
+
+  process.on("SIGTERM", shutdown);
+  process.on("SIGINT", shutdown);
 }
 
 main().catch(console.error);
