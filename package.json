@@ -1,7 +1,10 @@
 {
   "name": "ugc",
   "private": true,
-  "workspaces": ["apps/*", "packages/*"],
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
     "dev": "turbo dev",
     "build": "turbo build",
@@ -12,6 +15,7 @@
     "db:studio": "pnpm --filter @ugc/db db:studio"
   },
   "devDependencies": {
+    "next": "15.5.12",
     "turbo": "^2"
   },
   "packageManager": "pnpm@9.15.4"
