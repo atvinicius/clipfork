@@ -4,11 +4,12 @@ import "./globals.css";
 import { Geist } from "next/font/google";
 import { cn } from "@/lib/utils";
 
-const geist = Geist({subsets:['latin'],variable:'--font-sans'});
+const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
 
 export const metadata: Metadata = {
-  title: "UGC Platform",
-  description: "AI-powered UGC video automation",
+  title: "ClipFork — Fork any viral. Ship your version.",
+  description:
+    "AI-powered viral structure cloning platform for UGC video automation",
 };
 
 export default function RootLayout({
@@ -18,7 +19,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={cn("font-sans", geist.variable)}>
-      <body className="min-h-screen bg-gray-50 antialiased">
+      <body className="min-h-screen bg-[#FAFAFA] antialiased">
         <Providers>{children}</Providers>
       </body>
     </html>
