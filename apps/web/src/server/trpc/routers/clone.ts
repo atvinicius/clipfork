@@ -18,13 +18,7 @@ export const cloneRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      // Dynamically import the queues to avoid bundling worker deps in Next.js
-      const { cloneDownloadQueue, cloneAnalyzeQueue } = await import(
-        "@ugc/workers/queues"
-      ).catch(() => {
-        // Fallback: use direct Redis queue creation
-        return createQueuesFromRedis();
-      });
+      const { cloneDownloadQueue, cloneAnalyzeQueue } = createQueuesFromRedis();
 
       const orgId = ctx.org.id;
 

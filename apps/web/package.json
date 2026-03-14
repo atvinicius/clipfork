@@ -27,6 +27,7 @@
     "postcss": "^8.5.8",
     "react": "^19",
     "react-dom": "^19",
+    "recharts": "^3.8.0",
     "shadcn": "^4.0.6",
     "stripe": "^17",
     "superjson": "^2",

@@ -29,19 +29,24 @@ export const competitorRouter = router({
         type: z.enum(["ACCOUNT", "HASHTAG", "KEYWORD"]),
         platform: z.enum(["TIKTOK", "INSTAGRAM"]),
         value: z.string().min(1).max(200),
-        scanFrequency: z.enum(["DAILY", "TWICE_DAILY", "WEEKLY"]).default("DAILY"),
+        frequency: z.enum(["DAILY", "TWICE_DAILY", "WEEKLY"]).default("DAILY"),
       })
     )
     .mutation(async ({ ctx, input }) => {
-      return ctx.prisma.competitorWatch.create({
+      const watch = await ctx.prisma.competitorWatch.create({
         data: {
           orgId: ctx.org.id,
           type: input.type,
           platform: input.platform,
           value: input.value,
-          scanFrequency: input.scanFrequency,
+          scanFrequency: input.frequency,
         },
       });
+      return {
+        ...watch,
+        active: watch.isActive,
+        frequency: watch.scanFrequency,
+      };
     }),
 
   listWatches: protectedProcedure.query(async ({ ctx }) => {
@@ -56,7 +61,15 @@ export const competitorRouter = router({
     });
 
     return watches.map((w) => ({
-      ...w,
+      id: w.id,
+      orgId: w.orgId,
+      type: w.type,
+      platform: w.platform,
+      value: w.value,
+      frequency: w.scanFrequency,
+      active: w.isActive,
+      lastScannedAt: w.lastScannedAt,
+      createdAt: w.createdAt,
       postCount: w._count.posts,
     }));
   }),
@@ -65,23 +78,23 @@ export const competitorRouter = router({
     .input(
       z.object({
         id: z.string(),
-        isActive: z.boolean(),
+        active: z.boolean(),
       })
     )
     .mutation(async ({ ctx, input }) => {
-      return ctx.prisma.competitorWatch.update({
+      const watch = await ctx.prisma.competitorWatch.update({
         where: {
           id: input.id,
           orgId: ctx.org.id,
         },
-        data: { isActive: input.isActive },
+        data: { isActive: input.active },
       });
+      return { ...watch, active: watch.isActive, frequency: watch.scanFrequency };
     }),
 
   deleteWatch: protectedProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      // Delete associated posts first (cascade should handle, but be explicit)
       await ctx.prisma.competitorPost.deleteMany({
         where: {
           watchId: input.id,
@@ -106,7 +119,6 @@ export const competitorRouter = router({
       })
     )
     .query(async ({ ctx, input }) => {
-      // Verify the watch belongs to this org
       const watch = await ctx.prisma.competitorWatch.findFirst({
         where: { id: input.watchId, orgId: ctx.org.id },
       });
@@ -179,14 +191,28 @@ export const competitorRouter = router({
         nextCursor = next?.id;
       }
 
-      return { posts, nextCursor };
+      // Return flattened shape expected by the UI
+      return posts.map((p) => ({
+        id: p.id,
+        url: p.url,
+        views: p.views,
+        likes: p.likes,
+        shares: p.shares,
+        comments: p.comments,
+        engagementRate: p.engagementRate,
+        discoveredAt: p.discoveredAt,
+        platform: p.watch.platform,
+        caption: null as string | null,
+        thumbnailUrl: null as string | null,
+        watchValue: p.watch.value,
+      }));
     }),
 
   triggerScan: protectedProcedure
-    .input(z.object({ watchId: z.string() }))
+    .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
       const watch = await ctx.prisma.competitorWatch.findFirst({
-        where: { id: input.watchId, orgId: ctx.org.id },
+        where: { id: input.id, orgId: ctx.org.id },
       });
       if (!watch) {
         throw new TRPCError({

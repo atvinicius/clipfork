@@ -466,7 +466,7 @@ export default function TemplatesPage() {
             <div className="flex flex-wrap gap-3">
               <Select
                 value={categoryFilter}
-                onValueChange={setCategoryFilter}
+                onValueChange={(v) => setCategoryFilter(v ?? "all")}
               >
                 <SelectTrigger className="w-[160px]">
                   <SelectValue placeholder="Category" />
@@ -483,7 +483,7 @@ export default function TemplatesPage() {
 
               <Select
                 value={industryFilter}
-                onValueChange={setIndustryFilter}
+                onValueChange={(v) => setIndustryFilter(v ?? "all")}
               >
                 <SelectTrigger className="w-[160px]">
                   <SelectValue placeholder="Industry" />
@@ -500,7 +500,7 @@ export default function TemplatesPage() {
 
               <Select
                 value={pacingFilter}
-                onValueChange={setPacingFilter}
+                onValueChange={(v) => setPacingFilter(v ?? "all")}
               >
                 <SelectTrigger className="w-[140px]">
                   <SelectValue placeholder="Pacing" />
@@ -517,7 +517,7 @@ export default function TemplatesPage() {
 
               <Select
                 value={minScenesFilter}
-                onValueChange={setMinScenesFilter}
+                onValueChange={(v) => setMinScenesFilter(v ?? "all")}
               >
                 <SelectTrigger className="w-[140px]">
                   <SelectValue placeholder="Min scenes" />

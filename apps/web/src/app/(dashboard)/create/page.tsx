@@ -212,7 +212,7 @@ export default function CreateVideoPage() {
               <Select
                 value={selectedProductId}
                 onValueChange={(v) => {
-                  setSelectedProductId(v);
+                  setSelectedProductId(v ?? "");
                   setProductUrl("");
                 }}
               >
@@ -349,7 +349,7 @@ export default function CreateVideoPage() {
                 <CardContent>
                   <Select
                     value={selectedVoice}
-                    onValueChange={setSelectedVoice}
+                    onValueChange={(v) => setSelectedVoice(v ?? "")}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Select a voice..." />
@@ -372,7 +372,7 @@ export default function CreateVideoPage() {
               <CardTitle>Brand Kit (Optional)</CardTitle>
             </CardHeader>
             <CardContent>
-              <Select value={brandKitId} onValueChange={setBrandKitId}>
+              <Select value={brandKitId} onValueChange={(v) => setBrandKitId(v ?? "")}>
                 <SelectTrigger>
                   <SelectValue placeholder="No brand kit" />
                 </SelectTrigger>
