@@ -6,6 +6,8 @@ import { videoRouter } from "./routers/video";
 import { productRouter } from "./routers/product";
 import { brandKitRouter } from "./routers/brandkit";
 import { assetRouter } from "./routers/asset";
+import { cloneRouter } from "./routers/clone";
+import { templateRouter } from "./routers/template";
 
 export const appRouter = router({
   org: orgRouter,
@@ -15,6 +17,8 @@ export const appRouter = router({
   product: productRouter,
   brandKit: brandKitRouter,
   asset: assetRouter,
+  clone: cloneRouter,
+  template: templateRouter,
 });
 
 export type AppRouter = typeof appRouter;
