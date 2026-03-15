@@ -111,6 +111,7 @@ export default function CloneViralPage() {
   const [selectedProductId, setSelectedProductId] = useState("");
   const [selectedVoice, setSelectedVoice] = useState("");
   const [brandKitId, setBrandKitId] = useState("");
+  const [presetId, setPresetId] = useState<string | undefined>();
   const [isGenerating, setIsGenerating] = useState(false);
   const [generateProgress, setGenerateProgress] = useState(0);
 
@@ -118,6 +119,7 @@ export default function CloneViralPage() {
   const productsQuery = trpc.product.list.useQuery({ limit: 50 });
   const brandKitsQuery = trpc.brandKit.list.useQuery();
   const creditsQuery = trpc.credits.getBalance.useQuery();
+  const { data: presets } = trpc.preset.list.useQuery();
 
   // Mutations
   const analyzeMutation = trpc.clone.analyzeUrl.useMutation();
@@ -287,6 +289,7 @@ export default function CloneViralPage() {
         productId: selectedProductId,
         voiceId: selectedVoice,
         brandKitId: brandKitId || undefined,
+        presetId,
       });
 
       clearInterval(interval);
@@ -302,6 +305,7 @@ export default function CloneViralPage() {
     selectedProductId,
     selectedVoice,
     brandKitId,
+    presetId,
     generateMutation,
     router,
   ]);
@@ -813,6 +817,34 @@ export default function CloneViralPage() {
                   ))}
                 </SelectContent>
               </Select>
+            </CardContent>
+          </Card>
+
+          {/* Preset Selector */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Visual Style</CardTitle>
+              <CardDescription>
+                Choose a visual style preset for your cloned video.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 gap-3">
+                {presets?.map((preset) => (
+                  <button
+                    key={preset.id}
+                    onClick={() => setPresetId(preset.id)}
+                    className={`p-3 rounded-lg border text-left transition-all ${
+                      presetId === preset.id
+                        ? "border-purple-500 bg-purple-500/10"
+                        : "border-gray-700 bg-gray-800/50 hover:border-gray-600"
+                    }`}
+                  >
+                    <div className="font-medium text-sm text-white">{preset.name}</div>
+                    <div className="text-xs text-gray-400 mt-1">{preset.description}</div>
+                  </button>
+                ))}
+              </div>
             </CardContent>
           </Card>
 
