@@ -7,8 +7,6 @@ A multi-tenant SaaS platform for generating UGC-style video ads at scale, differ
 **Core value proposition:** Clone any viral video's structure, fill it with your product, and generate dozens of variants for A/B testing — all self-serve, no sales call required.
 
 **Competitive landscape (March 2026):**
-- Synthesia: $4B valuation, ~$200M ARR — enterprise/training focus
-- HeyGen: $100M ARR — avatar quality leader
 - Arcads: $10M ARR with 10 people — UGC ads
 - Creatify: $9M ARR — URL-to-video pioneer
 - Bluma (YC F25): $28K MRR in 4 weeks — viral cloning, but sales-gated
@@ -59,7 +57,7 @@ Workers are Node.js processes consuming from BullMQ queues. Each worker type han
 | Clone Analyzer | Viral video deconstruction | Gemini 2.5 Flash (native video analysis) |
 | Script Generator | Scene-by-scene script creation | Claude Sonnet 4.6 |
 | TTS | Text-to-speech conversion | ElevenLabs |
-| Avatar | Talking head video generation | D-ID (primary) |
+| Avatar | Talking head video generation | Stub (to be repurposed) |
 | Composer | Final video assembly | Remotion + FFmpeg |
 | Publisher | Auto-post to platforms | TikTok Content Posting API |
 | Monitor | Competitor scanning (cron) | Apify (TikTok/Instagram scraper actors) |
@@ -132,7 +130,7 @@ Scrape → Script → [TTS ‖ B-roll prep] → Avatar → Compose → Deliver
 2. **Script** (~5-10s) — Claude Sonnet 4.6 generates scene-by-scene script. If cloning, script is fitted to the template structure. If freeform, uses hook/benefit/CTA format. Multiple variant scripts generated for batch mode.
 3. **TTS** (~5-15s, parallel with 3b) — ElevenLabs converts script to audio. Per-scene audio segments.
 4. **B-roll prep** (~2-5s, parallel with 3a) — Resize product images, generate text overlays, fetch stock b-roll if needed.
-5. **Avatar** (~30-120s) — D-ID API (primary — mature REST API, good developer experience, competitive pricing). Creatify Aurora is evaluated as a future upgrade path for higher realism. Skipped for faceless videos.
+5. **Avatar** (~30-120s) — Currently a pass-through stub. Will be repurposed for AI-generated characters. Skipped for faceless videos.
 6. **Compose** (~20-60s) — Remotion renders final video: avatar clips + b-roll + text overlays + captions + transitions + music + logo. Output: 1080x1920 MP4 (9:16).
 7. **Deliver** — Upload to R2, optionally publish to TikTok via Content Posting API, provide download link.
 
@@ -140,7 +138,7 @@ Scrape → Script → [TTS ‖ B-roll prep] → Avatar → Compose → Deliver
 
 | Type | Pipeline | Cost |
 |------|----------|------|
-| Talking Head | Full pipeline (includes avatar API) | ~1-3 credits |
+| Talking Head | Full pipeline (includes avatar step) | ~1-3 credits |
 | Faceless | Skip avatar step (images + text + voiceover) | ~0.5-1 credit |
 | Cloned Structure | Template-driven, routes per scene type | Sum of scene costs: talking_head scenes = 1 credit each, faceless scenes (product_broll, text_overlay, testimonial) = 0.25 credits each. Example: 1 talking_head + 3 faceless scenes = 1.75 credits |
 
@@ -238,7 +236,6 @@ Fan-out after script step. Each variant is an independent BullMQ flow running co
 | Gemini 2.5 Flash | Video analysis / viral deconstruction | ~$0.15/M input tokens |
 | Claude Sonnet 4.6 | Script generation / copywriting | ~$3/M input, $15/M output |
 | ElevenLabs | Text-to-speech + voice library | $0.30/1K chars (Scale tier) |
-| D-ID | Avatar talking head generation | ~$0.05/sec of video |
 | Clerk | Auth, organizations, user management | Free to $0.02/MAU |
 | Stripe | Subscriptions, credit purchases | 2.9% + $0.30/txn |
 | Firecrawl | Product page scraping | $19/mo (3K scrapes) |
@@ -257,7 +254,7 @@ Fan-out after script step. Each variant is an independent BullMQ flow running co
 | Scraping | $0.006 | $0.006 |
 | Script (Claude) | $0.02 | $0.02 |
 | TTS (ElevenLabs) | $0.10 | $0.10 |
-| Avatar (D-ID) | $0.75 | — |
+| Avatar | $0.75 | — |
 | Remotion render | $0.05 | $0.05 |
 | Storage (R2) | $0.001 | $0.001 |
 | **Total** | **~$0.93** | **~$0.18** |
@@ -288,7 +285,7 @@ Fan-out after script step. Each variant is an independent BullMQ flow running co
 
 ### Quality Standards
 
-- Avatar APIs selected for highest realism (D-ID / Creatify Aurora).
+- Avatar pipeline preserved for future AI-generated character support.
 - Word-by-word animated captions matching TikTok native style.
 - Viral cloning preserves natural rhythm of proven content.
 - Claude Sonnet prompts enforce authentic, conversational tone — no "AI slop."
@@ -302,7 +299,7 @@ Credits deducted at job enqueue, refunded on failure. Each step has retry logic:
 | Scraping | Retry 2x, Firecrawl → Puppeteer fallback, prompt manual entry | No charge |
 | Script generation | Retry, fallback to GPT-4o | No charge |
 | TTS API | Retry 2x with exponential backoff | Refund |
-| Avatar API | Retry 1x, preserve intermediate artifacts for step-retry | Refund |
+| Avatar step | Retry 1x, preserve intermediate artifacts for step-retry | Refund |
 | Remotion render | Retry 1x, log config, alert engineering | Refund |
 | TikTok publish | Video stored; user gets video + error, can retry or download | No extra charge |
 | Video download (clone) | yt-dlp → RapidAPI fallback → prompt user to upload file directly | No charge |
@@ -328,7 +325,7 @@ Credits deducted at job enqueue, refunded on failure. Each step has retry logic:
 English-only at launch. Architecture is language-agnostic from the start:
 
 - Script generation prompts are parameterized by language.
-- ElevenLabs and D-ID both support 100+ languages.
+- ElevenLabs supports 100+ languages.
 - Template structure JSON is language-independent.
 - Adding a language is configuration, not re-architecture.
 

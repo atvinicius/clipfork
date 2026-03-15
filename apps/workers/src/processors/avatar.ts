@@ -17,14 +17,14 @@ export interface AvatarJobData {
 // ---------------------------------------------------------------------------
 
 /**
- * Avatar generation is currently disabled.
- * The pipeline step is kept as a pass-through so the job flow isn't broken.
- * When a better avatar provider is integrated, replace this stub.
+ * Avatar generation is currently a pass-through stub.
+ * The pipeline step is kept so the job flow isn't broken.
+ * This will be repurposed for AI-generated characters in a future iteration.
  */
 export async function processAvatarJob(job: { data: AvatarJobData }) {
   const { videoId, videoType } = job.data;
 
-  console.log(`[avatar] Skipping avatar generation for video ${videoId} (provider not configured)`);
+  console.log(`[avatar] Skipping avatar generation for video ${videoId} (not yet implemented)`);
 
   return {
     videoId,

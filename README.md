@@ -7,7 +7,7 @@ ClipFork is an AI-powered UGC video automation platform that deconstructs proven
 ## Features
 
 - **Viral Structure Cloning** -- Paste any TikTok/Instagram URL. Gemini 2.5 Flash analyzes scenes, hooks, pacing, and engagement patterns. Rebuild the same structure with your product.
-- **AI Video Generation** -- Claude Sonnet generates scripts, ElevenLabs creates voiceovers, D-ID produces talking head avatars, and Remotion composes the final video.
+- **AI Video Generation** -- Claude Sonnet generates scripts, ElevenLabs creates voiceovers, and Remotion composes the final video.
 - **Competitor Intelligence** -- Monitor competitor accounts, hashtags, and keywords. Auto-detect viral outliers (3x+ average engagement) and clone them with one click.
 - **Template Library** -- Save analyzed viral structures as reusable templates. Browse community templates filtered by category, industry, and pacing.
 - **TikTok Auto-Publishing** -- Connect TikTok accounts via OAuth. Publish completed videos directly or schedule them for optimal posting times.
@@ -28,7 +28,6 @@ ClipFork is an AI-powered UGC video automation platform that deconstructs proven
 | **AI -- Video Analysis** | Google Gemini 2.5 Flash (native video input) |
 | **AI -- Script Generation** | Anthropic Claude Sonnet |
 | **AI -- Voice** | ElevenLabs TTS |
-| **AI -- Avatar** | D-ID talking head generation |
 | **AI -- Video Composition** | Remotion + FFmpeg |
 | **Scraping** | Firecrawl (primary) + cheerio (fallback) |
 | **Competitor Monitoring** | Apify (TikTok/Instagram) |
@@ -98,7 +97,7 @@ ugc/
 │               ├── scraper.ts          # Firecrawl + cheerio product scraping
 │               ├── script-generator.ts # Claude Sonnet script generation
 │               ├── tts.ts              # ElevenLabs text-to-speech
-│               ├── avatar.ts           # D-ID talking head video
+│               ├── avatar.ts           # Avatar video (stub — to be repurposed)
 │               ├── composer.ts         # Remotion video composition (MVP)
 │               ├── pipeline.ts         # DAG orchestrator (FlowProducer)
 │               ├── video-downloader.ts # yt-dlp + RapidAPI fallback
@@ -194,7 +193,6 @@ All variables are documented in `.env.example`. At minimum, you need:
 | `R2_SECRET_ACCESS_KEY` | For storage | R2 secret key |
 | `ANTHROPIC_API_KEY` | For scripts | Claude API key |
 | `ELEVENLABS_API_KEY` | For voice | ElevenLabs API key |
-| `DID_API_KEY` | For avatars | D-ID API key |
 | `GOOGLE_AI_API_KEY` | For analysis | Gemini API key |
 | `FIRECRAWL_API_KEY` | For scraping | Firecrawl API key |
 | `APIFY_API_TOKEN` | For monitoring | Apify API token |
@@ -219,8 +217,8 @@ pnpm db:studio    # Open Prisma Studio GUI
 ### Video Generation Pipeline
 
 ```
-Product URL ──> Scraper ──> Script Generator ──> TTS ──> Avatar ──> Composer ──> Done
-                (Firecrawl)   (Claude Sonnet)  (ElevenLabs) (D-ID)  (Remotion)
+Product URL ──> Scraper ──> Script Generator ──> TTS ──> Composer ──> Done
+                (Firecrawl)   (Claude Sonnet)  (ElevenLabs)  (Remotion)
 ```
 
 Jobs are orchestrated as a DAG using BullMQ's FlowProducer. Each step runs as an independent worker with retry logic. Credits are deducted atomically before pipeline start and refunded on failure.
