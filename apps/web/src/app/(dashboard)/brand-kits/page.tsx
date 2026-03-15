@@ -73,6 +73,7 @@ export default function BrandKitsPage() {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<BrandKitFormData>({ ...emptyForm });
+  const [loraImageUrls, setLoraImageUrls] = useState("");
 
   const brandKitsQuery = trpc.brandKit.list.useQuery();
 
@@ -96,6 +97,17 @@ export default function BrandKitsPage() {
       brandKitsQuery.refetch();
     },
   });
+
+  const trainLoRA = trpc.brandKit.trainLoRA.useMutation({
+    onSuccess: () => {
+      brandKitsQuery.refetch();
+    },
+  });
+
+  const handleTrainLoRA = (brandKitId: string) => {
+    const urls = loraImageUrls.split(",").map((u) => u.trim()).filter(Boolean);
+    trainLoRA.mutate({ brandKitId, imageUrls: urls });
+  };
 
   function openEdit(kitId: string) {
     const kit = brandKitsQuery.data?.find((k) => k.id === kitId);
@@ -428,6 +440,54 @@ export default function BrandKitsPage() {
             </DialogDescription>
           </DialogHeader>
           {renderForm("edit")}
+
+          {/* LoRA Training Section */}
+          {editingId && (() => {
+            const editingKit = brandKitsQuery.data?.find((k) => k.id === editingId);
+            return (
+              <div className="border-t border-gray-700 pt-4 mt-4">
+                <h3 className="text-sm font-medium text-white mb-2">Visual Style (Brand LoRA)</h3>
+                <p className="text-xs text-gray-400 mb-3">
+                  Upload 4+ images of your brand&apos;s visual style to train a custom AI model.
+                  Costs 1 credit.
+                </p>
+
+                {editingKit?.loraTrainingStatus === "ready" ? (
+                  <div className="flex items-center gap-2 text-green-400 text-sm">
+                    <span className="w-2 h-2 rounded-full bg-green-400" />
+                    LoRA trained and ready
+                  </div>
+                ) : editingKit?.loraTrainingStatus === "training" ? (
+                  <div className="flex items-center gap-2 text-yellow-400 text-sm">
+                    <span className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse" />
+                    Training in progress...
+                  </div>
+                ) : editingKit?.loraTrainingStatus === "failed" ? (
+                  <div className="flex items-center gap-2 text-red-400 text-sm">
+                    <span className="w-2 h-2 rounded-full bg-red-400" />
+                    Training failed. Try again.
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <input
+                      type="text"
+                      placeholder="Paste image URLs (comma-separated, min 4)"
+                      className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded text-sm text-white"
+                      value={loraImageUrls}
+                      onChange={(e) => setLoraImageUrls(e.target.value)}
+                    />
+                    <button
+                      onClick={() => handleTrainLoRA(editingId)}
+                      disabled={loraImageUrls.split(",").filter(Boolean).length < 4 || trainLoRA.isPending}
+                      className="px-4 py-2 bg-purple-600 text-white rounded text-sm hover:bg-purple-700 disabled:opacity-50"
+                    >
+                      {trainLoRA.isPending ? "Starting..." : "Train LoRA (1 credit)"}
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
         </DialogContent>
       </Dialog>
     </div>
