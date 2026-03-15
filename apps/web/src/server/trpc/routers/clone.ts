@@ -81,6 +81,7 @@ export const cloneRouter = router({
         voiceId: z.string(),
         avatarId: z.string().optional(),
         brandKitId: z.string().optional(),
+        presetId: z.string().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -118,6 +119,7 @@ export const cloneRouter = router({
           productId: input.productId,
           templateId: input.templateId,
           brandKitId: input.brandKitId,
+          presetId: input.presetId,
           type: "CLONED",
           status: "QUEUED",
           avatarId: input.avatarId,
@@ -165,6 +167,7 @@ export const cloneRouter = router({
               voiceId: z.string(),
               avatarId: z.string().optional(),
               brandKitId: z.string().optional(),
+              presetId: z.string().optional(),
             })
           )
           .min(1)

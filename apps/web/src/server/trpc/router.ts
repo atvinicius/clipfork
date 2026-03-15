@@ -10,6 +10,7 @@ import { cloneRouter } from "./routers/clone";
 import { templateRouter } from "./routers/template";
 import { competitorRouter } from "./routers/competitor";
 import { tiktokRouter } from "./routers/tiktok";
+import { presetRouter } from "./routers/preset";
 
 export const appRouter = router({
   org: orgRouter,
@@ -23,6 +24,7 @@ export const appRouter = router({
   template: templateRouter,
   competitor: competitorRouter,
   tiktok: tiktokRouter,
+  preset: presetRouter,
 });
 
 export type AppRouter = typeof appRouter;

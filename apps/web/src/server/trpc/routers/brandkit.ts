@@ -1,5 +1,7 @@
 import { z } from "zod";
 import { router, protectedProcedure } from "../init";
+import { canAfford } from "@ugc/shared";
+import { sendJob } from "../../queue";
 
 export const brandKitRouter = router({
   create: protectedProcedure
@@ -83,5 +85,62 @@ export const brandKitRouter = router({
       return ctx.prisma.brandKit.delete({
         where: { id: input.id, orgId: ctx.org.id },
       });
+    }),
+
+  trainLoRA: protectedProcedure
+    .input(
+      z.object({
+        brandKitId: z.string(),
+        imageUrls: z.array(z.string().url()).min(4, "At least 4 images required"),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      if (!canAfford(ctx.org.creditsBalance, 1)) {
+        throw new Error("Insufficient credits. LoRA training requires 1 credit.");
+      }
+
+      await ctx.prisma.brandKit.update({
+        where: { id: input.brandKitId, orgId: ctx.org.id },
+        data: {
+          loraTrainingImages: input.imageUrls,
+          loraTrainingStatus: "pending",
+        },
+      });
+
+      await ctx.prisma.$transaction([
+        ctx.prisma.organization.update({
+          where: { id: ctx.org.id },
+          data: { creditsBalance: { decrement: 1 } },
+        }),
+        ctx.prisma.creditTransaction.create({
+          data: {
+            orgId: ctx.org.id,
+            amount: -1,
+            type: "USAGE",
+            referenceId: input.brandKitId,
+          },
+        }),
+      ]);
+
+      await sendJob("lora-training", {
+        brandKitId: input.brandKitId,
+        orgId: ctx.org.id,
+      });
+
+      return { status: "pending" };
+    }),
+
+  getTrainingStatus: protectedProcedure
+    .input(z.object({ brandKitId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const brandKit = await ctx.prisma.brandKit.findFirstOrThrow({
+        where: { id: input.brandKitId, orgId: ctx.org.id },
+        select: {
+          loraTrainingStatus: true,
+          loraUrl: true,
+          loraTriggerWord: true,
+        },
+      });
+      return brandKit;
     }),
 });
