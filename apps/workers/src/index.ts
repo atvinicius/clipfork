@@ -3,8 +3,9 @@ import { QUEUE_NAMES, sendJob } from "./queues";
 import { processScraperJob } from "./processors/scraper";
 import { processScriptJob } from "./processors/script-generator";
 import { processTTSJob } from "./processors/tts";
-import { processAvatarJob } from "./processors/avatar";
-import { processComposerJob } from "./processors/composer";
+import { processSceneGeneratorJob } from "./processors/scene-generator";
+import { processVideoAssemblerJob } from "./processors/video-assembler";
+import { processLoRATrainingJob } from "./processors/lora-trainer";
 import { handlePipelineFailure } from "./processors/pipeline";
 import { processVideoDownloaderJob } from "./processors/video-downloader";
 import { processCloneAnalyzerJob } from "./processors/clone-analyzer";
@@ -13,11 +14,9 @@ import { processPublishJob } from "./processors/publisher";
 import { processSchedulerJob } from "./processors/scheduler";
 import type { ScriptJobData } from "./processors/script-generator";
 import type { TTSJobData } from "./processors/tts";
-import type { AvatarJobData } from "./processors/avatar";
-import type { ComposerJobData } from "./processors/composer";
 
 // ---------------------------------------------------------------------------
-// Pipeline step definitions for job chaining
+// Pipeline metadata — carries IDs + data needed by existing processors
 // ---------------------------------------------------------------------------
 
 interface PipelineMeta {
@@ -27,20 +26,28 @@ interface PipelineMeta {
   orgId: string;
   videoType: "TALKING_HEAD" | "FACELESS" | "CLONED";
   voiceId: string;
-  avatarId?: string;
   brandKitId?: string;
+  presetId?: string;
   templateId?: string;
+  // Legacy fields — still needed by scraper/script/TTS processors
   brandKit: ScriptJobData["brandKit"];
   templateStructure: ScriptJobData["templateStructure"];
 }
+
+// ---------------------------------------------------------------------------
+// Pipeline step chaining — hybrid approach:
+// - SCRAPER→SCRIPT→TTS: old data-forwarding pattern (existing processors unchanged)
+// - TTS→SCENE_GENERATOR→VIDEO_ASSEMBLER: simplified DB-mediated flow (new processors)
+// ---------------------------------------------------------------------------
 
 async function chainNextPipelineStep(
   currentQueue: string,
   pipeline: PipelineMeta
 ): Promise<void> {
-  const { videoId, voiceId, avatarId, videoType } = pipeline;
+  const { videoId, voiceId, videoType } = pipeline;
 
   switch (currentQueue) {
+    // --- Old data-forwarding pattern (existing processors expect job.data fields) ---
     case QUEUE_NAMES.SCRAPER:
       await sendJob(QUEUE_NAMES.SCRIPT, {
         videoId,
@@ -61,25 +68,19 @@ async function chainNextPipelineStep(
       } satisfies TTSJobData & { _pipeline: PipelineMeta });
       break;
 
+    // --- New DB-mediated pattern (new processors read from DB using videoId) ---
     case QUEUE_NAMES.TTS:
-      await sendJob(QUEUE_NAMES.AVATAR, {
+      await sendJob(QUEUE_NAMES.SCENE_GENERATOR, {
         videoId,
-        script: "",
-        audioUrl: "",
-        avatarId: avatarId ?? "",
-        videoType,
         _pipeline: pipeline,
-      } satisfies AvatarJobData & { _pipeline: PipelineMeta });
+      });
       break;
 
-    case QUEUE_NAMES.AVATAR:
-      await sendJob(QUEUE_NAMES.COMPOSER, {
+    case QUEUE_NAMES.SCENE_GENERATOR:
+      await sendJob(QUEUE_NAMES.VIDEO_ASSEMBLER, {
         videoId,
-        audioUrls: [],
-        avatarVideoUrl: null,
-        productImages: [],
-        script: { type: videoType },
-      } satisfies ComposerJobData);
+        _pipeline: pipeline,
+      });
       break;
   }
 }
@@ -101,7 +102,7 @@ async function main() {
     QUEUE_NAMES.SCRAPER,
     QUEUE_NAMES.SCRIPT,
     QUEUE_NAMES.TTS,
-    QUEUE_NAMES.AVATAR,
+    QUEUE_NAMES.SCENE_GENERATOR,
   ] as const;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -109,7 +110,14 @@ async function main() {
     [QUEUE_NAMES.SCRAPER]: processScraperJob,
     [QUEUE_NAMES.SCRIPT]: processScriptJob,
     [QUEUE_NAMES.TTS]: processTTSJob,
-    [QUEUE_NAMES.AVATAR]: processAvatarJob,
+    [QUEUE_NAMES.SCENE_GENERATOR]: processSceneGeneratorJob,
+  };
+
+  const concurrencyMap: Record<string, number> = {
+    [QUEUE_NAMES.SCRAPER]: 5,
+    [QUEUE_NAMES.SCRIPT]: 3,
+    [QUEUE_NAMES.TTS]: 3,
+    [QUEUE_NAMES.SCENE_GENERATOR]: 2,
   };
 
   for (const queueName of pipelineQueues) {
@@ -117,7 +125,7 @@ async function main() {
 
     await boss.work(
       queueName,
-      { localConcurrency: queueName === QUEUE_NAMES.SCRAPER ? 5 : 3 },
+      { localConcurrency: concurrencyMap[queueName] ?? 3 },
       async (jobs) => {
         const job = jobs[0];
         try {
@@ -142,14 +150,14 @@ async function main() {
     );
   }
 
-  // Composer — end of pipeline, no chaining needed
+  // Video Assembler — end of pipeline, no chaining needed
   await boss.work(
-    QUEUE_NAMES.COMPOSER,
+    QUEUE_NAMES.VIDEO_ASSEMBLER,
     { localConcurrency: 2 },
     async (jobs) => {
       const job = jobs[0];
       try {
-        await processComposerJob(job as any);
+        await processVideoAssemblerJob(job as any);
       } catch (error) {
         const data = job.data as Record<string, unknown>;
         const videoId = data?.videoId as string | undefined;
@@ -159,6 +167,13 @@ async function main() {
         throw error;
       }
     }
+  );
+
+  // LoRA Training — independent, not part of video pipeline
+  await boss.work(
+    QUEUE_NAMES.LORA_TRAINING,
+    { localConcurrency: 1 },
+    async (jobs) => { await processLoRATrainingJob(jobs[0] as any); }
   );
 
   // -------------------------------------------------------------------
@@ -204,16 +219,17 @@ async function main() {
   });
 
   console.log("Workers registered:");
-  console.log("  - scraper          (concurrency: 5)");
-  console.log("  - script           (concurrency: 3)");
-  console.log("  - tts              (concurrency: 3)");
-  console.log("  - avatar           (concurrency: 3)");
-  console.log("  - composer         (concurrency: 2)");
-  console.log("  - clone-download   (concurrency: 3)");
-  console.log("  - clone-analyze    (concurrency: 2)");
-  console.log("  - monitor          (concurrency: 2)");
-  console.log("  - publish          (concurrency: 2)");
-  console.log("  - scheduler        (concurrency: 1, cron: every minute)");
+  console.log("  - scraper            (concurrency: 5)");
+  console.log("  - script             (concurrency: 3)");
+  console.log("  - tts                (concurrency: 3)");
+  console.log("  - scene-generator    (concurrency: 2)");
+  console.log("  - video-assembler    (concurrency: 2)");
+  console.log("  - lora-training      (concurrency: 1)");
+  console.log("  - clone-download     (concurrency: 3)");
+  console.log("  - clone-analyze      (concurrency: 2)");
+  console.log("  - monitor            (concurrency: 2)");
+  console.log("  - publish            (concurrency: 2)");
+  console.log("  - scheduler          (concurrency: 1, cron: every minute)");
   console.log("Workers ready and listening for jobs via pg-boss...");
 
   // -------------------------------------------------------------------

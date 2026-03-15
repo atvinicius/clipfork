@@ -17,8 +17,8 @@ export interface PipelineOptions {
   orgId: string;
   videoType: "TALKING_HEAD" | "FACELESS" | "CLONED";
   voiceId: string;
-  avatarId?: string;
   brandKitId?: string;
+  presetId?: string;
   templateId?: string;
 }
 
@@ -43,19 +43,13 @@ async function calculateCreditsForVideo(
       };
       const scenes = structure.structure?.scenes ?? [];
       return calculateClonedVideoCredits(
-        scenes.map((s) => ({
-          type: s.type as
-            | "talking_head"
-            | "product_broll"
-            | "text_overlay"
-            | "testimonial"
-            | "greenscreen",
-        }))
+        scenes.map((s) => ({ type: s.type }))
       );
     }
   }
 
-  return calculateVideoCredits(videoType, 15);
+  // Default: 5 scenes for a standard video
+  return calculateVideoCredits(5);
 }
 
 // ---------------------------------------------------------------------------
@@ -72,8 +66,8 @@ export async function startVideoPipeline(
     orgId,
     videoType,
     voiceId,
-    avatarId,
     brandKitId,
+    presetId,
     templateId,
   } = opts;
 
@@ -118,12 +112,10 @@ export async function startVideoPipeline(
     `[pipeline] Deducted ${creditCost} credits from org ${orgId} (balance: ${org.creditsBalance - creditCost})`
   );
 
-  // 2. Fetch brand kit if specified
+  // 2. Fetch brand kit if specified (needed by script-generator via job data)
   let brandKit: ScriptJobData["brandKit"] = null;
   if (brandKitId) {
-    const bk = await prisma.brandKit.findUnique({
-      where: { id: brandKitId },
-    });
+    const bk = await prisma.brandKit.findUnique({ where: { id: brandKitId } });
     if (bk) {
       brandKit = {
         toneOfVoice: bk.toneOfVoice,
@@ -133,20 +125,16 @@ export async function startVideoPipeline(
     }
   }
 
-  // 3. Fetch template structure if specified
+  // 3. Fetch template structure if specified (needed by script-generator via job data)
   let templateStructure: ScriptJobData["templateStructure"] = null;
   if (templateId) {
-    const template = await prisma.template.findUnique({
-      where: { id: templateId },
-    });
+    const template = await prisma.template.findUnique({ where: { id: templateId } });
     if (template) {
-      templateStructure =
-        template.structure as ScriptJobData["templateStructure"];
+      templateStructure = template.structure as ScriptJobData["templateStructure"];
     }
   }
 
   // 4. Send the first pipeline job (scraper) with pipeline metadata
-  //    The index.ts worker wrapper chains subsequent steps on completion.
   const jobId = await sendJob(QUEUE_NAMES.SCRAPER, {
     productUrl,
     productId,
@@ -158,8 +146,8 @@ export async function startVideoPipeline(
       orgId,
       videoType,
       voiceId,
-      avatarId,
       brandKitId,
+      presetId,
       templateId,
       brandKit,
       templateStructure,

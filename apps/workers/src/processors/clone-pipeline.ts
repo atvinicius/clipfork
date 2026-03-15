@@ -16,6 +16,7 @@ export interface ClonePipelineGenerateOptions {
   voiceId: string;
   avatarId?: string;
   brandKitId?: string;
+  presetId?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -34,6 +35,7 @@ export async function startCloneGenerationPipeline(
     voiceId,
     avatarId,
     brandKitId,
+    presetId,
   } = opts;
 
   console.log(
@@ -132,6 +134,7 @@ export async function startCloneGenerationPipeline(
       voiceId,
       avatarId,
       brandKitId,
+      presetId,
       templateId,
       brandKit,
       templateStructure,

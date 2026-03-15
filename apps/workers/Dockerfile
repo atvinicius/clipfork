@@ -1,6 +1,6 @@
 FROM node:20-slim
 
-RUN apt-get update && apt-get install -y python3 yt-dlp && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y python3 yt-dlp ffmpeg && rm -rf /var/lib/apt/lists/*
 RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
 
 WORKDIR /app
