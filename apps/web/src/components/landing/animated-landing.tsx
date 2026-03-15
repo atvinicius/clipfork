@@ -151,8 +151,8 @@ export default function AnimatedLanding() {
       requestAnimationFrame(() => {
         const y = window.scrollY;
         if (heroContentRef.current) {
-          const parallax = Math.min(y * 0.3, 200);
-          const opacity = Math.max(1 - y / 600, 0);
+          const parallax = Math.min(y * 0.15, 120);
+          const opacity = Math.max(1 - y / 1400, 0);
           heroContentRef.current.style.transform = `translateY(${parallax}px)`;
           heroContentRef.current.style.opacity = String(opacity);
         }
