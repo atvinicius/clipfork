@@ -10,12 +10,13 @@ export const videoRouter = router({
         productId: z.string().optional(),
         videoType: z.enum(["TALKING_HEAD", "FACELESS"]),
         brandKitId: z.string().optional(),
+        presetId: z.string().optional(),
         avatarId: z.string().optional(),
         voiceId: z.string().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const credits = calculateVideoCredits(input.videoType);
+      const credits = calculateVideoCredits(5);
       if (!canAfford(ctx.org.creditsBalance, credits)) {
         throw new Error("Insufficient credits");
       }
@@ -25,6 +26,7 @@ export const videoRouter = router({
           orgId: ctx.org.id,
           productId: input.productId,
           brandKitId: input.brandKitId,
+          presetId: input.presetId,
           type: input.videoType,
           status: "QUEUED",
           avatarId: input.avatarId,
@@ -81,7 +83,7 @@ export const videoRouter = router({
         orderBy: { createdAt: "desc" },
         take: input.limit + 1,
         ...(input.cursor ? { cursor: { id: input.cursor }, skip: 1 } : {}),
-        include: { product: true, brandKit: true },
+        include: { product: true, brandKit: true, preset: true },
       });
 
       let nextCursor: string | undefined;
@@ -98,7 +100,7 @@ export const videoRouter = router({
     .query(async ({ ctx, input }) => {
       return ctx.prisma.video.findFirstOrThrow({
         where: { id: input.id, orgId: ctx.org.id },
-        include: { product: true, brandKit: true, template: true },
+        include: { product: true, brandKit: true, template: true, preset: true },
       });
     }),
 
