@@ -236,9 +236,17 @@ export default function VideosPage() {
               <CardContent className="p-0">
                 {/* Thumbnail */}
                 <div className="relative flex h-40 items-center justify-center bg-gradient-to-br from-[#1E1B4B] to-[#7C3AED]/60">
-                  <span className="text-4xl">
-                    {video.status === "COMPLETED" ? "▶" : "⏳"}
-                  </span>
+                  {video.sceneImages && (video.sceneImages as string[])[0] ? (
+                    <img
+                      src={(video.sceneImages as string[])[0]}
+                      alt="Video thumbnail"
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <span className="text-4xl">
+                      {video.status === "COMPLETED" ? "▶" : "⏳"}
+                    </span>
+                  )}
                   {video.duration && (
                     <span className="absolute bottom-2 right-2 rounded bg-black/70 px-1.5 py-0.5 text-xs text-white">
                       {Math.round(video.duration)}s
@@ -442,6 +450,33 @@ export default function VideosPage() {
                   </p>
                 </div>
               </div>
+
+              {/* Scene thumbnails */}
+              {selectedVideoQuery.data.sceneImages &&
+                (selectedVideoQuery.data.sceneImages as string[]).length >
+                  0 && (
+                  <div className="space-y-2">
+                    <p className="text-xs font-medium text-muted-foreground">
+                      Scenes
+                    </p>
+                    <div className="flex gap-2 overflow-x-auto pb-2">
+                      {(
+                        selectedVideoQuery.data.sceneImages as string[]
+                      ).map((imgUrl, i) => (
+                        <div key={i} className="flex-shrink-0">
+                          <img
+                            src={imgUrl}
+                            alt={`Scene ${i + 1}`}
+                            className="h-20 w-auto rounded border object-cover"
+                          />
+                          <p className="mt-1 text-center text-[10px] text-muted-foreground">
+                            Scene {i + 1}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
               {/* Published status */}
               {selectedVideoQuery.data.publishedAt && (
