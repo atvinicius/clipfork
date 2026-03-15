@@ -62,7 +62,7 @@ export const videoRouter = router({
             "SCRAPING",
             "SCRIPTING",
             "GENERATING_AUDIO",
-            "GENERATING_AVATAR",
+            "GENERATING_SCENES",
             "COMPOSING",
             "COMPLETED",
             "FAILED",

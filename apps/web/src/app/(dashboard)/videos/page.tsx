@@ -34,7 +34,7 @@ const STATUS_COLORS: Record<string, string> = {
   SCRAPING: "bg-yellow-100 text-yellow-700 border-yellow-200",
   SCRIPTING: "bg-yellow-100 text-yellow-700 border-yellow-200",
   GENERATING_AUDIO: "bg-yellow-100 text-yellow-700 border-yellow-200",
-  GENERATING_AVATAR: "bg-yellow-100 text-yellow-700 border-yellow-200",
+  GENERATING_SCENES: "bg-yellow-100 text-yellow-700 border-yellow-200",
   COMPOSING: "bg-yellow-100 text-yellow-700 border-yellow-200",
   COMPLETED: "bg-green-100 text-green-700 border-green-200",
   FAILED: "bg-red-100 text-red-700 border-red-200",
@@ -45,7 +45,7 @@ const STATUS_LABELS: Record<string, string> = {
   SCRAPING: "Scraping",
   SCRIPTING: "Scripting",
   GENERATING_AUDIO: "Audio",
-  GENERATING_AVATAR: "Avatar",
+  GENERATING_SCENES: "Scenes",
   COMPOSING: "Composing",
   COMPLETED: "Completed",
   FAILED: "Failed",
@@ -56,7 +56,7 @@ function isProcessingStatus(status: string) {
     "SCRAPING",
     "SCRIPTING",
     "GENERATING_AUDIO",
-    "GENERATING_AVATAR",
+    "GENERATING_SCENES",
     "COMPOSING",
   ].includes(status);
 }

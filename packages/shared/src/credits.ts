@@ -1,33 +1,30 @@
-import type { SceneType, VideoType } from "./types";
+import type { SceneType } from "./types";
 
-const TALKING_HEAD_CREDIT_PER_15S = 1;
-const FACELESS_CREDIT_PER_15S = 0.5;
-const SCENE_CREDITS: Record<SceneType, number> = {
+const SCENE_CREDITS: Record<string, number> = {
   talking_head: 1,
   product_broll: 0.25,
   text_overlay: 0.25,
   testimonial: 0.25,
   greenscreen: 0.25,
+  hook: 0.25,
+  benefit: 0.25,
+  demo: 0.25,
+  cta: 0.25,
 };
 
-export function calculateVideoCredits(
-  type: VideoType,
-  durationSeconds: number = 15
-): number {
-  if (type === "CLONED") {
-    throw new Error(
-      "Use calculateClonedVideoCredits() for CLONED videos — requires scene list"
-    );
-  }
-  const segments = Math.ceil(durationSeconds / 15);
-  if (type === "TALKING_HEAD") {
-    return segments * TALKING_HEAD_CREDIT_PER_15S;
-  }
-  return segments * FACELESS_CREDIT_PER_15S;
+/**
+ * Calculate credits for a standard (non-cloned) video based on scene count.
+ * 2 credits per 5 scenes (or fraction thereof), minimum 1.
+ */
+export function calculateVideoCredits(sceneCount: number): number {
+  return Math.max(1, Math.ceil(sceneCount / 5) * 2);
 }
 
+/**
+ * Calculate credits for a cloned video based on per-scene type costs.
+ */
 export function calculateClonedVideoCredits(
-  scenes: { type: SceneType }[]
+  scenes: { type: SceneType | string }[]
 ): number {
   return scenes.reduce((total, scene) => {
     return total + (SCENE_CREDITS[scene.type] ?? 0.25);

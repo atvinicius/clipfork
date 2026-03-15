@@ -7,7 +7,11 @@ export type SceneType =
   | "product_broll"
   | "text_overlay"
   | "testimonial"
-  | "greenscreen";
+  | "greenscreen"
+  | "hook"
+  | "benefit"
+  | "demo"
+  | "cta";
 
 export interface PlanConfig {
   creditsMonthly: number;

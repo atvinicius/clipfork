@@ -4,47 +4,46 @@ import {
   calculateClonedVideoCredits,
   canAfford,
 } from "../credits";
-import type { Scene } from "../schemas";
 
 describe("calculateVideoCredits", () => {
-  it("returns 1 credit for a talking head video", () => {
-    expect(calculateVideoCredits("TALKING_HEAD")).toBe(1);
+  it("returns 2 credits for 5 scenes", () => {
+    expect(calculateVideoCredits(5)).toBe(2);
   });
 
-  it("returns 3 credits for a long talking head video", () => {
-    expect(calculateVideoCredits("TALKING_HEAD", 45)).toBe(3);
+  it("returns 2 credits for fewer than 5 scenes (1 chunk)", () => {
+    expect(calculateVideoCredits(3)).toBe(2);
   });
 
-  it("returns 0.5 credits for a faceless video", () => {
-    expect(calculateVideoCredits("FACELESS")).toBe(0.5);
+  it("returns 4 credits for 6-10 scenes", () => {
+    expect(calculateVideoCredits(8)).toBe(4);
   });
 
-  it("returns 1.5 credits for a long faceless video", () => {
-    expect(calculateVideoCredits("FACELESS", 45)).toBe(1.5);
+  it("returns 2 for 1 scene", () => {
+    expect(calculateVideoCredits(1)).toBe(2);
+  });
+
+  it("returns 6 for 15 scenes", () => {
+    expect(calculateVideoCredits(15)).toBe(6);
   });
 });
 
 describe("calculateClonedVideoCredits", () => {
   it("returns 1 credit for a single talking head scene", () => {
-    const scenes: Scene[] = [
-      { type: "talking_head", duration_s: 5 },
-    ];
+    const scenes = [{ type: "talking_head" as const, duration_s: 5 }];
     expect(calculateClonedVideoCredits(scenes)).toBe(1);
   });
 
-  it("returns 0.25 credits for a single faceless scene", () => {
-    const scenes: Scene[] = [
-      { type: "product_broll", duration_s: 3 },
-    ];
+  it("returns 0.25 credits for a single broll scene", () => {
+    const scenes = [{ type: "product_broll" as const, duration_s: 3 }];
     expect(calculateClonedVideoCredits(scenes)).toBe(0.25);
   });
 
   it("returns 1.75 for 1 talking head + 3 faceless scenes", () => {
-    const scenes: Scene[] = [
-      { type: "talking_head", duration_s: 4 },
-      { type: "product_broll", duration_s: 3 },
-      { type: "text_overlay", duration_s: 2 },
-      { type: "testimonial", duration_s: 3 },
+    const scenes = [
+      { type: "talking_head" as const, duration_s: 4 },
+      { type: "product_broll" as const, duration_s: 3 },
+      { type: "text_overlay" as const, duration_s: 2 },
+      { type: "testimonial" as const, duration_s: 3 },
     ];
     expect(calculateClonedVideoCredits(scenes)).toBe(1.75);
   });
