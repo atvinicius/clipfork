@@ -1,4 +1,4 @@
-import fal from "@fal-ai/client";
+import { fal } from "@fal-ai/client";
 import type {
   AIProvider,
   ImageGenerationRequest,
@@ -30,7 +30,7 @@ export class FalProvider implements AIProvider {
       input.loras = [{ path: req.loraUrl, scale: req.loraScale ?? 0.8 }];
     }
 
-    const result = await fal.subscribe("fal-ai/flux-pro/v1.1", { input });
+    const result = await fal.subscribe("fal-ai/flux-pro/v1.1", { input: input as any });
     const data = result.data as { images: Array<{ url: string }>; seed: number };
     return { url: data.images[0]!.url, seed: data.seed };
   }

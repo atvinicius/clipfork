@@ -282,7 +282,7 @@ async function fallbackVideoGeneration(
   prompt: string,
   duration: number
 ) {
-  const fal = (await import("@fal-ai/client")).default;
+  const { fal } = await import("@fal-ai/client");
   const result = await fal.subscribe("fal-ai/wan/v2.2/image-to-video", {
     input: {
       image_url: imageUrl,
