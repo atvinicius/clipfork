@@ -72,7 +72,7 @@ enum VideoStatus {
   SCRAPING
   SCRIPTING
   GENERATING_AUDIO
-  GENERATING_AVATAR
+  GENERATING_SCENES
   COMPOSING
   COMPLETED
   FAILED
@@ -137,9 +137,13 @@ model BrandKit {
   logoUrl        String?
   colors         Json        @default("{}")
   toneOfVoice    ToneOfVoice @default(CASUAL)
-  targetAudience String?
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
+  targetAudience     String?
+  loraUrl            String?
+  loraTriggerWord    String?
+  loraTrainingStatus String?
+  loraTrainingImages Json?
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
 
   org      Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
   products Product[]
@@ -207,6 +211,21 @@ model Template {
   @@index([isPublic])
 }
 
+model Preset {
+  id             String   @id @default(uuid())
+  niche          String
+  name           String
+  description    String?
+  sceneStyles    Json
+  negativePrompt String?
+  defaultPacing  String   @default("medium")
+  musicMood      String?
+  isDefault      Boolean  @default(false)
+  createdAt      DateTime @default(now())
+
+  videos Video[]
+}
+
 model CompetitorWatch {
   id            String         @id @default(uuid())
   orgId         String
@@ -253,6 +272,7 @@ model Video {
   productId          String?
   templateId         String?
   brandKitId         String?
+  presetId           String?
   batchId            String?
   type               VideoType
   status             VideoStatus @default(QUEUED)
@@ -264,6 +284,8 @@ model Video {
   avatarVideoUrl     String?
   finalVideoUrl      String?
   duration           Float?
+  sceneVideos        Json?
+  sceneImages        Json?
   creditsUsed        Int         @default(0)
   error              String?
   publishedAt        DateTime?
@@ -277,6 +299,7 @@ model Video {
   product        Product?           @relation(fields: [productId], references: [id], onDelete: SetNull)
   template       Template?          @relation(fields: [templateId], references: [id], onDelete: SetNull)
   brandKit       BrandKit?          @relation(fields: [brandKitId], references: [id], onDelete: SetNull)
+  preset         Preset?            @relation(fields: [presetId], references: [id], onDelete: SetNull)
   tiktokAccount  TikTokAccount?     @relation(fields: [tiktokAccountId], references: [id], onDelete: SetNull)
   creditTransactions CreditTransaction[]
 
