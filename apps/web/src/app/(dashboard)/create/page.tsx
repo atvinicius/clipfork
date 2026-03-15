@@ -43,10 +43,12 @@ export default function CreateVideoPage() {
   const [script, setScript] = useState(
     "Hey everyone! I just tried this amazing product and I have to tell you about it...\n\nThe quality is incredible, and the price point is perfect for anyone looking to upgrade their routine.\n\nSeriously, if you haven't tried this yet, you're missing out. Link in bio!"
   );
+  const [presetId, setPresetId] = useState<string | undefined>();
   const [brandKitId, setBrandKitId] = useState<string>("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationProgress, setGenerationProgress] = useState(0);
 
+  const { data: presets } = trpc.preset.list.useQuery();
   const productsQuery = trpc.product.list.useQuery({ limit: 50 });
   const brandKitsQuery = trpc.brandKit.list.useQuery();
   const creditsQuery = trpc.credits.getBalance.useQuery();
@@ -96,6 +98,7 @@ export default function CreateVideoPage() {
         productUrl: productUrl || undefined,
         videoType: videoType === "VOICEOVER" ? "TALKING_HEAD" : "FACELESS",
         brandKitId: brandKitId || undefined,
+        presetId,
         voiceId: selectedVoice || undefined,
       });
       setGenerationProgress(100);
@@ -322,6 +325,27 @@ export default function CreateVideoPage() {
               </Select>
             </CardContent>
           </Card>
+
+          {/* Preset Selector */}
+          <div className="space-y-3">
+            <label className="text-sm font-medium text-gray-300">Visual Style</label>
+            <div className="grid grid-cols-2 gap-3">
+              {presets?.map((preset) => (
+                <button
+                  key={preset.id}
+                  onClick={() => setPresetId(preset.id)}
+                  className={`p-3 rounded-lg border text-left transition-all ${
+                    presetId === preset.id
+                      ? "border-purple-500 bg-purple-500/10"
+                      : "border-gray-700 bg-gray-800/50 hover:border-gray-600"
+                  }`}
+                >
+                  <div className="font-medium text-sm text-white">{preset.name}</div>
+                  <div className="text-xs text-gray-400 mt-1">{preset.description}</div>
+                </button>
+              ))}
+            </div>
+          </div>
 
           <Card>
             <CardHeader>
