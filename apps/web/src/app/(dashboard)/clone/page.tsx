@@ -35,7 +35,7 @@ interface AnalyzedScene {
 }
 
 interface AnalysisResult {
-  jobId: string;
+  templateId: string;
   status: string;
   title: string;
   platform: string;
@@ -72,6 +72,67 @@ const STEP_LABELS = ["Paste URL", "Review Structure", "Customize & Generate"];
 // Helpers
 // ---------------------------------------------------------------------------
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function mapTemplateToAnalysis(
+  template: { id: string; sourceUrl: string | null; structure: any },
+  url: string
+): AnalysisResult {
+  const struct = template.structure as Record<string, any>;
+  const scenes: AnalyzedScene[] = (struct?.structure?.scenes ?? []).map(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (s: any, i: number) => ({
+      index: i + 1,
+      label:
+        s.type
+          ?.replace(/_/g, " ")
+          .replace(/\b\w/g, (c: string) => c.toUpperCase()) ??
+        `Scene ${i + 1}`,
+      description:
+        [s.emotion, s.gesture].filter(Boolean).join(" — ") ||
+        s.type ||
+        "Scene",
+      duration: `${s.duration_s ?? 0}s`,
+      type: s.type ?? "unknown",
+    })
+  );
+
+  const totalDuration = struct?.format?.total_duration_s ?? 0;
+
+  return {
+    templateId: template.id,
+    status: "completed",
+    title: "Viral Video Analysis",
+    platform: url.includes("tiktok") ? "TikTok" : "Instagram",
+    engagementScore: Math.round(Math.min(100, totalDuration * 4.5)),
+    hookAnalysis: {
+      type: struct?.structure?.hook?.type ?? "unknown",
+      text: `Opens with a ${struct?.structure?.hook?.type ?? "unknown"} hook`,
+      effectiveness: Math.min(95, 70 + scenes.length * 4),
+    },
+    pacing: {
+      averageCutDuration:
+        scenes.length > 0
+          ? `${(scenes.reduce((sum, s) => sum + parseFloat(s.duration), 0) / scenes.length).toFixed(1)}s`
+          : "--",
+      totalDuration: `${totalDuration}s`,
+      rhythm:
+        struct?.style?.pacing === "fast"
+          ? "Fast-paced with quick cuts"
+          : struct?.style?.pacing === "slow"
+            ? "Slow and deliberate"
+            : "Natural flow with strategic pauses",
+    },
+    scenes,
+    viralFactors: [
+      `${struct?.structure?.hook?.type ?? "Question"} hook in opening`,
+      `${struct?.style?.pacing ?? "Medium"} pacing throughout`,
+      `${struct?.style?.music_mood ?? "Trending"} audio mood`,
+      `${struct?.structure?.cta?.type ?? "Urgency"} CTA technique`,
+      `${scenes.length} distinct scenes`,
+    ],
+  };
+}
+
 function getSceneTypeColor(type: string): string {
   switch (type) {
     case "hook":
@@ -101,9 +162,13 @@ export default function CloneViralPage() {
 
   // Step 1: URL input
   const [url, setUrl] = useState("");
+  const [sourceUrl, setSourceUrl] = useState<string | null>(null);
   const [analysisProgress, setAnalysisProgress] = useState(0);
   const [analysisStage, setAnalysisStage] = useState("");
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(
+    null
+  );
+  const [analysisStartedAt, setAnalysisStartedAt] = useState<number | null>(
     null
   );
 
@@ -120,6 +185,15 @@ export default function CloneViralPage() {
   const brandKitsQuery = trpc.brandKit.list.useQuery();
   const creditsQuery = trpc.credits.getBalance.useQuery();
   const { data: presets } = trpc.preset.list.useQuery();
+
+  // Poll for analysis completion
+  const pollQuery = trpc.clone.pollAnalysis.useQuery(
+    { sourceUrl: sourceUrl! },
+    {
+      enabled: !!sourceUrl && !analysisResult,
+      refetchInterval: 3000,
+    }
+  );
 
   // Mutations
   const analyzeMutation = trpc.clone.analyzeUrl.useMutation();
@@ -149,6 +223,36 @@ export default function CloneViralPage() {
   }, []);
 
   // -------------------------------------------------------------------------
+  // When poll returns a completed template, map it to analysis result
+  // -------------------------------------------------------------------------
+
+  useEffect(() => {
+    if (
+      pollQuery.data?.status === "completed" &&
+      pollQuery.data.template &&
+      sourceUrl &&
+      !analysisResult
+    ) {
+      const mapped = mapTemplateToAnalysis(pollQuery.data.template, sourceUrl);
+      setAnalysisResult(mapped);
+      setAnalysisProgress(100);
+      setAnalysisStage("Analysis complete!");
+    }
+  }, [pollQuery.data, sourceUrl, analysisResult]);
+
+  // Timeout: stop polling after 120s
+  useEffect(() => {
+    if (sourceUrl && !analysisResult && analysisStartedAt) {
+      const elapsed = Date.now() - analysisStartedAt;
+      if (elapsed > 120_000) {
+        setSourceUrl(null);
+        setAnalysisProgress(0);
+        setAnalysisStage("Analysis timed out. Please try again.");
+      }
+    }
+  }, [pollQuery.dataUpdatedAt, sourceUrl, analysisResult, analysisStartedAt]);
+
+  // -------------------------------------------------------------------------
   // Handlers
   // -------------------------------------------------------------------------
 
@@ -158,111 +262,45 @@ export default function CloneViralPage() {
     setAnalysisProgress(0);
     setAnalysisStage("Downloading video metadata...");
     setAnalysisResult(null);
+    setSourceUrl(null);
+    setAnalysisStartedAt(null);
 
     const interval = setInterval(() => {
       setAnalysisProgress((prev) => {
         if (prev < 25) {
-          setAnalysisStage("Downloading video metadata...");
-          return prev + 6;
+          setAnalysisStage("Downloading video...");
+          return prev + 3;
         }
         if (prev < 50) {
           setAnalysisStage("Extracting scene structure and transitions...");
-          return prev + 4;
+          return prev + 2;
         }
         if (prev < 75) {
           setAnalysisStage("Analyzing hook effectiveness and pacing...");
-          return prev + 3;
+          return prev + 1;
         }
         if (prev < 90) {
           setAnalysisStage("Computing engagement score and viral factors...");
-          return prev + 1;
+          return prev + 0.5;
         }
         return prev;
       });
-    }, 400);
+    }, 800);
 
     try {
       const result = await analyzeMutation.mutateAsync({ url });
-      clearInterval(interval);
-      setAnalysisProgress(100);
-      setAnalysisStage("Analysis complete!");
-
-      // Map API response into our analysis result structure
-      const analysisData: AnalysisResult = {
-        jobId: result.jobId,
-        status: result.status,
-        title: "Viral Video Analysis",
-        platform: url.includes("tiktok") ? "TikTok" : "Instagram",
-        engagementScore: 87,
-        hookAnalysis: {
-          type: "Question Hook",
-          text: "Opens with a provocative question to stop the scroll",
-          effectiveness: 92,
-        },
-        pacing: {
-          averageCutDuration: "2.3s",
-          totalDuration: "18s",
-          rhythm: "Fast-paced with strategic pauses",
-        },
-        scenes: [
-          {
-            index: 1,
-            label: "Hook",
-            description: "Attention-grabbing opener with text overlay",
-            duration: "2s",
-            type: "hook",
-          },
-          {
-            index: 2,
-            label: "Problem",
-            description: "Relatable pain point with emotional appeal",
-            duration: "3s",
-            type: "problem",
-          },
-          {
-            index: 3,
-            label: "Reveal",
-            description: "Product introduction with visual punch",
-            duration: "4s",
-            type: "reveal",
-          },
-          {
-            index: 4,
-            label: "Demo",
-            description: "Quick product demonstration and results",
-            duration: "5s",
-            type: "demo",
-          },
-          {
-            index: 5,
-            label: "Social Proof",
-            description: "Testimonial or results showcase",
-            duration: "2s",
-            type: "proof",
-          },
-          {
-            index: 6,
-            label: "CTA",
-            description: "Urgent call to action with scarcity",
-            duration: "2s",
-            type: "cta",
-          },
-        ],
-        viralFactors: [
-          "Pattern interrupt in first 0.5s",
-          "Text overlays match speech",
-          "Trending audio usage",
-          "Quick cuts maintain attention",
-          "Strong emotional trigger",
-        ],
-      };
-
-      setAnalysisResult(analysisData);
+      // Job queued — start polling for template creation
+      setSourceUrl(result.sourceUrl);
+      setAnalysisStartedAt(Date.now());
     } catch {
       clearInterval(interval);
       setAnalysisProgress(0);
       setAnalysisStage("");
     }
+
+    // Progress bar keeps running until poll finds the template
+    // Clean up interval when analysis result arrives
+    return () => clearInterval(interval);
   }, [url, isValidUrl, analyzeMutation]);
 
   // Auto-advance to step 2 when analysis completes
@@ -285,7 +323,7 @@ export default function CloneViralPage() {
 
     try {
       await generateMutation.mutateAsync({
-        templateId: analysisResult.jobId,
+        templateId: analysisResult.templateId,
         productId: selectedProductId,
         voiceId: selectedVoice,
         brandKitId: brandKitId || undefined,

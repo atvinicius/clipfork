@@ -9,6 +9,7 @@ import { uploadToR2 } from "../lib/r2";
 export interface VideoDownloaderJobData {
   url: string;
   orgId: string;
+  sourceUrl?: string;
   templateId?: string;
 }
 

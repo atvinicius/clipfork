@@ -21,23 +21,16 @@ export const cloneRouter = router({
     .mutation(async ({ ctx, input }) => {
       const orgId = ctx.org.id;
 
-      // Enqueue download job
+      // Only enqueue download — worker chains to analyze after completion
       const jobId = await sendJob("clone-download", {
         url: input.url,
         orgId,
-      });
-
-      // Enqueue analysis job
-      await sendJob("clone-analyze", {
-        videoUrl: "",
-        videoKey: "",
         sourceUrl: input.url,
-        orgId,
-        downloadJobId: jobId,
       });
 
       return {
         jobId: jobId ?? "unknown",
+        sourceUrl: input.url,
         status: "queued",
       };
     }),
@@ -67,6 +60,31 @@ export const cloneRouter = router({
       }
 
       return template;
+    }),
+
+  // ---------------------------------------------------------------------------
+  // pollAnalysis — poll for analysis completion by source URL
+  // ---------------------------------------------------------------------------
+  pollAnalysis: protectedProcedure
+    .input(
+      z.object({
+        sourceUrl: z.string().url(),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const template = await ctx.prisma.template.findFirst({
+        where: {
+          orgId: ctx.org.id,
+          sourceUrl: input.sourceUrl,
+        },
+        orderBy: { createdAt: "desc" },
+      });
+
+      if (!template) {
+        return { status: "processing" as const, template: null };
+      }
+
+      return { status: "completed" as const, template };
     }),
 
   // ---------------------------------------------------------------------------

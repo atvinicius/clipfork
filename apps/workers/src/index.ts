@@ -180,10 +180,26 @@ async function main() {
   // Non-pipeline workers
   // -------------------------------------------------------------------
 
+  // Clone download — chains to clone-analyze after download completes
+  // (inline chaining, not using chainNextPipelineStep, because this is a
+  // simple two-step flow with no Video record or credit refund logic)
   await boss.work(
     QUEUE_NAMES.CLONE_DOWNLOAD,
     { localConcurrency: 3 },
-    async (jobs) => { await processVideoDownloaderJob(jobs[0] as any); }
+    async (jobs) => {
+      const job = jobs[0];
+      const result = await processVideoDownloaderJob(job as any);
+
+      const data = job.data as { url: string; orgId: string; sourceUrl?: string };
+      await sendJob(QUEUE_NAMES.CLONE_ANALYZE, {
+        videoUrl: result.videoUrl,
+        videoKey: result.videoKey,
+        sourceUrl: data.sourceUrl ?? data.url,
+        orgId: data.orgId,
+      });
+
+      console.log(`[clone-download] Chained to clone-analyze for ${data.url}`);
+    }
   );
 
   await boss.work(
