@@ -7,11 +7,12 @@ ClipFork is an AI-powered UGC video automation platform that deconstructs proven
 ## Features
 
 - **Viral Structure Cloning** -- Paste any TikTok/Instagram URL. Gemini 2.5 Flash analyzes scenes, hooks, pacing, and engagement patterns. Rebuild the same structure with your product.
-- **AI Video Generation** -- Claude Sonnet generates scripts, ElevenLabs creates voiceovers, and Remotion composes the final video.
+- **AI Video Generation** -- Claude Sonnet generates scripts, ElevenLabs creates voiceovers, fal.ai Flux Pro generates scene images, Kling V3 animates them into video clips, and FFmpeg assembles the final video.
 - **Competitor Intelligence** -- Monitor competitor accounts, hashtags, and keywords. Auto-detect viral outliers (3x+ average engagement) and clone them with one click.
 - **Template Library** -- Save analyzed viral structures as reusable templates. Browse community templates filtered by category, industry, and pacing.
 - **TikTok Auto-Publishing** -- Connect TikTok accounts via OAuth. Publish completed videos directly or schedule them for optimal posting times.
-- **Brand Kits** -- Define brand colors, tone of voice, and target audience. Every generated video stays on-brand automatically.
+- **Brand Kits + LoRA Training** -- Define brand colors, tone of voice, and target audience. Train custom LoRA models on your brand imagery for consistent AI-generated visuals.
+- **Visual Presets** -- 8 built-in TikTok niche presets (Beauty, E-commerce, Food, Fitness, Tech, Home, TikTok Shop, Professional) with scene-type-specific style prompts.
 - **Credit-Based Billing** -- Four Stripe-powered tiers: Free (3), Starter ($29/mo, 30), Growth ($79/mo, 100), Scale ($199/mo, 300).
 
 ## Tech Stack
@@ -23,12 +24,15 @@ ClipFork is an AI-powered UGC video automation platform that deconstructs proven
 | **API** | tRPC (end-to-end type safety) |
 | **Auth** | Clerk (organizations, roles, OAuth) |
 | **Database** | PostgreSQL (Supabase) via Prisma ORM |
-| **Queue** | BullMQ + Redis (Upstash) |
+| **Queue** | pg-boss (PostgreSQL-based) |
 | **Storage** | Cloudflare R2 (S3-compatible) |
 | **AI -- Video Analysis** | Google Gemini 2.5 Flash (native video input) |
 | **AI -- Script Generation** | Anthropic Claude Sonnet |
 | **AI -- Voice** | ElevenLabs TTS |
-| **AI -- Video Composition** | Remotion + FFmpeg |
+| **AI -- Image Generation** | fal.ai Flux Pro v1.1 (with LoRA support) |
+| **AI -- Video Generation** | fal.ai Kling V3 Pro (image-to-video) |
+| **AI -- LoRA Training** | fal.ai Flux LoRA Fast Training |
+| **Video Assembly** | FFmpeg (concat, audio overlay, captions) |
 | **Scraping** | Firecrawl (primary) + cheerio (fallback) |
 | **Competitor Monitoring** | Apify (TikTok/Instagram) |
 | **Payments** | Stripe (subscriptions + customer portal) |
@@ -79,9 +83,10 @@ ugc/
 │   │   │           ├── credits.ts      # Balance + transactions
 │   │   │           ├── billing.ts      # Stripe checkout + portal
 │   │   │           ├── video.ts        # CRUD + credit deduction
-│   │   │           ├── product.ts      # Product catalog CRUD
-│   │   │           ├── brandkit.ts     # Brand kit CRUD
+│   │   │           ├── product.ts      # Product catalog CRUD + URL scraping
+│   │   │           ├── brandkit.ts     # Brand kit CRUD + LoRA training
 │   │   │           ├── asset.ts        # R2 presigned uploads
+│   │   │           ├── preset.ts       # Visual preset listing
 │   │   │           ├── clone.ts        # Viral analysis + generation
 │   │   │           ├── template.ts     # Template library
 │   │   │           ├── competitor.ts   # Watches + outliers
@@ -97,9 +102,10 @@ ugc/
 │               ├── scraper.ts          # Firecrawl + cheerio product scraping
 │               ├── script-generator.ts # Claude Sonnet script generation
 │               ├── tts.ts              # ElevenLabs text-to-speech
-│               ├── avatar.ts           # Avatar video (stub — to be repurposed)
-│               ├── composer.ts         # Remotion video composition (MVP)
-│               ├── pipeline.ts         # DAG orchestrator (FlowProducer)
+│               ├── scene-generator.ts  # fal.ai Flux Pro image + Kling V3 video per scene
+│               ├── video-assembler.ts  # FFmpeg concat + audio overlay + captions
+│               ├── lora-trainer.ts     # fal.ai Flux LoRA fast training
+│               ├── pipeline.ts         # Pipeline orchestrator (pg-boss chaining)
 │               ├── video-downloader.ts # yt-dlp + RapidAPI fallback
 │               ├── clone-analyzer.ts   # Gemini 2.5 Flash video analysis
 │               ├── clone-pipeline.ts   # Clone generation orchestrator
@@ -110,14 +116,16 @@ ugc/
 ├── packages/
 │   ├── db/                     # Prisma schema + client
 │   │   └── prisma/
-│   │       └── schema.prisma           # 10 entities, 8 enums
+│   │       ├── schema.prisma           # 12 entities, 8 enums
+│   │       └── seed-presets.ts        # 8 TikTok niche presets
 │   │
 │   └── shared/                 # Shared types, schemas, utilities
 │       └── src/
 │           ├── types.ts                # TypeScript interfaces
 │           ├── schemas.ts              # Zod validation schemas
 │           ├── credits.ts              # Credit calculation logic
-│           └── crypto.ts               # AES-256-GCM token encryption
+│           ├── crypto.ts               # AES-256-GCM token encryption
+│           └── ai-provider.ts          # AIProvider interface (image/video/LoRA)
 │
 ├── docker-compose.yml          # PostgreSQL + Redis
 ├── turbo.json                  # Turborepo pipeline config
@@ -138,7 +146,8 @@ ugc/
 - **Template** -- Viral structure analysis results (JSON), engagement scores
 - **CompetitorWatch** -- Monitored accounts/hashtags/keywords with scan frequency
 - **CompetitorPost** -- Discovered posts with engagement metrics, outlier detection
-- **Video** -- Full pipeline state machine (QUEUED -> SCRAPING -> SCRIPTING -> GENERATING_AUDIO -> GENERATING_AVATAR -> COMPOSING -> COMPLETED)
+- **Preset** -- Visual style presets per TikTok niche (scene-type prompts, pacing, music mood)
+- **Video** -- Full pipeline state machine (QUEUED -> SCRAPING -> SCRIPTING -> GENERATING_AUDIO -> GENERATING_SCENES -> COMPOSING -> COMPLETED)
 - **TikTokAccount** -- OAuth tokens (AES-256-GCM encrypted), publishing config
 
 ## Getting Started
@@ -182,7 +191,6 @@ All variables are documented in `.env.example`. At minimum, you need:
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `DATABASE_URL` | Yes | PostgreSQL connection string |
-| `REDIS_URL` | Yes | Redis connection string |
 | `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Yes | Clerk publishable key |
 | `CLERK_SECRET_KEY` | Yes | Clerk secret key |
 | `CLERK_WEBHOOK_SECRET` | Yes | Clerk webhook signing secret |
@@ -194,6 +202,7 @@ All variables are documented in `.env.example`. At minimum, you need:
 | `ANTHROPIC_API_KEY` | For scripts | Claude API key |
 | `ELEVENLABS_API_KEY` | For voice | ElevenLabs API key |
 | `GOOGLE_AI_API_KEY` | For analysis | Gemini API key |
+| `FAL_KEY` | For video gen | fal.ai API key (image/video/LoRA) |
 | `FIRECRAWL_API_KEY` | For scraping | Firecrawl API key |
 | `APIFY_API_TOKEN` | For monitoring | Apify API token |
 | `TOKEN_ENCRYPTION_KEY` | For TikTok | 32-byte hex key for AES-256-GCM |
@@ -217,11 +226,12 @@ pnpm db:studio    # Open Prisma Studio GUI
 ### Video Generation Pipeline
 
 ```
-Product URL ──> Scraper ──> Script Generator ──> TTS ──> Composer ──> Done
-                (Firecrawl)   (Claude Sonnet)  (ElevenLabs)  (Remotion)
+Product URL ──> Scraper ──> Script Generator ──> TTS ──> Scene Generator ──> Video Assembler ──> Done
+                (Firecrawl)   (Claude Sonnet)  (ElevenLabs) (Flux Pro +     (FFmpeg concat +
+                                                              Kling V3)      audio + captions)
 ```
 
-Jobs are orchestrated as a DAG using BullMQ's FlowProducer. Each step runs as an independent worker with retry logic. Credits are deducted atomically before pipeline start and refunded on failure.
+Jobs are orchestrated via pg-boss (PostgreSQL-based queue). The scraper→script→TTS chain uses job-data forwarding; scene generation and video assembly use DB-mediated flow (read from Video record). Credits are deducted atomically before pipeline start.
 
 ### Viral Cloning Pipeline
 
@@ -239,11 +249,7 @@ Watch Config ──> Apify Scan ──> Engagement Calc ──> Outlier Detectio
 
 ### Credit System
 
-| Video Type | Cost |
-|-----------|------|
-| Talking Head | 1 credit per 15s segment |
-| Faceless | 0.5 credits per 15s segment |
-| Cloned | Varies by scene composition |
+Credits scale by scene count: `max(1, ceil(sceneCount / 5) * 2)`. Default 5-scene video costs 2 credits.
 
 ## Brand
 
