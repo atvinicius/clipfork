@@ -16,4 +16,4 @@ RUN cd packages/db && npx prisma generate
 
 WORKDIR /app/apps/workers
 
-CMD ["npx", "tsx", "src/index.ts"]
+CMD ["node", "--dns-result-order=ipv4first", "--import", "tsx", "src/index.ts"]
