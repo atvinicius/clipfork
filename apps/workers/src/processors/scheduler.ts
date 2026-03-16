@@ -14,7 +14,7 @@ export interface SchedulerJobData {
 // ---------------------------------------------------------------------------
 
 export async function processSchedulerJob(job: { data: SchedulerJobData }) {
-  console.log(`[scheduler] Running scheduled publish check...`);
+  // Quiet unless there's work to do
 
   // Find videos that are ready to publish
   const videosToPublish = await prisma.video.findMany({
@@ -36,7 +36,6 @@ export async function processSchedulerJob(job: { data: SchedulerJobData }) {
   });
 
   if (videosToPublish.length === 0) {
-    console.log(`[scheduler] No videos to publish`);
     return { enqueued: 0 };
   }
 

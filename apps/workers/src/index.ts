@@ -237,10 +237,10 @@ async function main() {
   );
 
   // -------------------------------------------------------------------
-  // Scheduler cron — check for scheduled publishes every minute
+  // Scheduler cron — check for scheduled publishes every 5 minutes
   // -------------------------------------------------------------------
 
-  await boss.schedule(QUEUE_NAMES.SCHEDULER, "* * * * *", {
+  await boss.schedule(QUEUE_NAMES.SCHEDULER, "*/5 * * * *", {
     _trigger: "cron",
   });
 
@@ -255,7 +255,7 @@ async function main() {
   console.log("  - clone-analyze      (concurrency: 2)");
   console.log("  - monitor            (concurrency: 2)");
   console.log("  - publish            (concurrency: 2)");
-  console.log("  - scheduler          (concurrency: 1, cron: every minute)");
+  console.log("  - scheduler          (concurrency: 1, cron: every 5 min)");
   console.log("Workers ready and listening for jobs via pg-boss...");
 
   // -------------------------------------------------------------------
