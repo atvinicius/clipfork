@@ -1,3 +1,6 @@
+import dns from "node:dns";
+dns.setDefaultResultOrder("ipv4first");
+
 import { startBoss, stopBoss } from "./boss";
 import { QUEUE_NAMES, sendJob } from "./queues";
 import { processScraperJob } from "./processors/scraper";
