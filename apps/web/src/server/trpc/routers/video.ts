@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { router, protectedProcedure } from "../init";
+import { TRPCError } from "@trpc/server";
 import { calculateVideoCredits, canAfford } from "@ugc/shared";
+import { sendJob } from "../../queue";
 
 export const videoRouter = router({
   create: protectedProcedure
@@ -16,19 +18,32 @@ export const videoRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      const orgId = ctx.org.id;
       const credits = calculateVideoCredits(5);
       if (!canAfford(ctx.org.creditsBalance, credits)) {
-        throw new Error("Insufficient credits");
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: `Insufficient credits: need ${credits}, have ${ctx.org.creditsBalance}`,
+        });
+      }
+
+      // Resolve product URL from product record if not provided directly
+      let productUrl = input.productUrl ?? "";
+      if (!productUrl && input.productId) {
+        const product = await ctx.prisma.product.findUnique({
+          where: { id: input.productId },
+        });
+        productUrl = product?.sourceUrl ?? "";
       }
 
       const video = await ctx.prisma.video.create({
         data: {
-          orgId: ctx.org.id,
+          orgId,
           productId: input.productId,
           brandKitId: input.brandKitId,
           presetId: input.presetId,
           type: input.videoType,
-          status: "QUEUED",
+          status: "SCRAPING",
           avatarId: input.avatarId,
           voiceId: input.voiceId,
           creditsUsed: credits,
@@ -38,12 +53,12 @@ export const videoRouter = router({
       // Deduct credits
       await ctx.prisma.$transaction([
         ctx.prisma.organization.update({
-          where: { id: ctx.org.id },
+          where: { id: orgId },
           data: { creditsBalance: { decrement: credits } },
         }),
         ctx.prisma.creditTransaction.create({
           data: {
-            orgId: ctx.org.id,
+            orgId,
             amount: -credits,
             type: "USAGE",
             referenceId: video.id,
@@ -51,7 +66,44 @@ export const videoRouter = router({
         }),
       ]);
 
-      // TODO: enqueue to BullMQ video pipeline
+      // Fetch brand kit data for script generator
+      let brandKit: {
+        toneOfVoice: string;
+        targetAudience: string | null;
+        colors: Record<string, string>;
+      } | null = null;
+      if (input.brandKitId) {
+        const bk = await ctx.prisma.brandKit.findUnique({
+          where: { id: input.brandKitId },
+        });
+        if (bk) {
+          brandKit = {
+            toneOfVoice: bk.toneOfVoice,
+            targetAudience: bk.targetAudience,
+            colors: bk.colors as Record<string, string>,
+          };
+        }
+      }
+
+      // Enqueue to video pipeline (scraper → script → TTS → scenes → assembler)
+      await sendJob("scraper", {
+        productUrl,
+        productId: input.productId ?? "",
+        orgId,
+        _pipeline: {
+          videoId: video.id,
+          productUrl,
+          productId: input.productId ?? "",
+          orgId,
+          videoType: input.videoType,
+          voiceId: input.voiceId ?? "",
+          brandKitId: input.brandKitId,
+          presetId: input.presetId,
+          brandKit,
+          templateStructure: null,
+        },
+      });
+
       return video;
     }),
 

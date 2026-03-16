@@ -160,9 +160,54 @@ export const cloneRouter = router({
             referenceId: video.id,
           },
         }),
+        ctx.prisma.video.update({
+          where: { id: video.id },
+          data: { status: "SCRAPING" },
+        }),
       ]);
 
-      // 5. TODO: enqueue to clone generation pipeline
+      // 5. Resolve product URL and enqueue to pipeline
+      const product = await ctx.prisma.product.findUnique({
+        where: { id: input.productId },
+      });
+      const productUrl = input.productUrl ?? product?.sourceUrl ?? "";
+
+      let brandKit: {
+        toneOfVoice: string;
+        targetAudience: string | null;
+        colors: Record<string, string>;
+      } | null = null;
+      if (input.brandKitId) {
+        const bk = await ctx.prisma.brandKit.findUnique({
+          where: { id: input.brandKitId },
+        });
+        if (bk) {
+          brandKit = {
+            toneOfVoice: bk.toneOfVoice,
+            targetAudience: bk.targetAudience,
+            colors: bk.colors as Record<string, string>,
+          };
+        }
+      }
+
+      await sendJob("scraper", {
+        productUrl,
+        productId: input.productId,
+        orgId,
+        _pipeline: {
+          videoId: video.id,
+          productUrl,
+          productId: input.productId,
+          orgId,
+          videoType: "CLONED" as const,
+          voiceId: input.voiceId,
+          brandKitId: input.brandKitId,
+          presetId: input.presetId,
+          templateId: input.templateId,
+          brandKit,
+          templateStructure: template.structure,
+        },
+      });
 
       return {
         videoId: video.id,
@@ -245,7 +290,7 @@ export const cloneRouter = router({
         )
       );
 
-      // 5. Deduct credits
+      // 5. Deduct credits and update statuses
       await ctx.prisma.$transaction([
         ctx.prisma.organization.update({
           where: { id: orgId },
@@ -261,9 +306,59 @@ export const cloneRouter = router({
             },
           })
         ),
+        ...videos.map((video) =>
+          ctx.prisma.video.update({
+            where: { id: video.id },
+            data: { status: "SCRAPING" },
+          })
+        ),
       ]);
 
-      // 6. TODO: enqueue each to clone generation pipeline
+      // 6. Enqueue each variant to the pipeline
+      for (const [i, video] of videos.entries()) {
+        const variant = input.variants[i]!;
+        const product = await ctx.prisma.product.findUnique({
+          where: { id: variant.productId },
+        });
+        const productUrl = variant.productUrl ?? product?.sourceUrl ?? "";
+
+        let brandKit: {
+          toneOfVoice: string;
+          targetAudience: string | null;
+          colors: Record<string, string>;
+        } | null = null;
+        if (variant.brandKitId) {
+          const bk = await ctx.prisma.brandKit.findUnique({
+            where: { id: variant.brandKitId },
+          });
+          if (bk) {
+            brandKit = {
+              toneOfVoice: bk.toneOfVoice,
+              targetAudience: bk.targetAudience,
+              colors: bk.colors as Record<string, string>,
+            };
+          }
+        }
+
+        await sendJob("scraper", {
+          productUrl,
+          productId: variant.productId,
+          orgId,
+          _pipeline: {
+            videoId: video.id,
+            productUrl,
+            productId: variant.productId,
+            orgId,
+            videoType: "CLONED" as const,
+            voiceId: variant.voiceId,
+            brandKitId: variant.brandKitId,
+            presetId: variant.presetId,
+            templateId: input.templateId,
+            brandKit,
+            templateStructure: template.structure,
+          },
+        });
+      }
 
       return {
         batchId,
