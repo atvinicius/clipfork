@@ -46,6 +46,14 @@ export default function ProductsPage() {
     },
   });
 
+  const scrapeUrlMutation = trpc.product.scrapeUrl.useMutation({
+    onSuccess: () => {
+      setShowAddDialog(false);
+      setAddForm({ name: "", sourceUrl: "" });
+      productsQuery.refetch();
+    },
+  });
+
   const updateProductMutation = trpc.product.update.useMutation({
     onSuccess: () => {
       productsQuery.refetch();
@@ -137,9 +145,17 @@ export default function ProductsPage() {
               onClick={() => openProductDetail(product.id)}
             >
               <CardContent className="p-0">
-                {/* Product image placeholder */}
                 <div className="flex h-32 items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900">
-                  <span className="text-4xl">📦</span>
+                  {(product.images as string[] | null)?.[0] ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={(product.images as string[])[0]}
+                      alt={product.name}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <span className="text-4xl">📦</span>
+                  )}
                 </div>
                 <div className="p-4">
                   <h3 className="truncate text-sm font-medium">
@@ -206,14 +222,29 @@ export default function ProductsPage() {
             </div>
             <div>
               <Label htmlFor="product-url">Product URL (optional)</Label>
-              <Input
-                id="product-url"
-                placeholder="https://..."
-                value={addForm.sourceUrl}
-                onChange={(e) =>
-                  setAddForm({ ...addForm, sourceUrl: e.target.value })
-                }
-              />
+              <div className="flex gap-2">
+                <Input
+                  id="product-url"
+                  placeholder="https://..."
+                  value={addForm.sourceUrl}
+                  onChange={(e) =>
+                    setAddForm({ ...addForm, sourceUrl: e.target.value })
+                  }
+                  className="flex-1"
+                />
+                <Button
+                  variant="outline"
+                  disabled={!addForm.sourceUrl || scrapeUrlMutation.isPending}
+                  onClick={() => {
+                    scrapeUrlMutation.mutate({ url: addForm.sourceUrl });
+                  }}
+                >
+                  {scrapeUrlMutation.isPending ? "Scraping..." : "Scrape"}
+                </Button>
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Paste a URL and click Scrape to auto-fill product details.
+              </p>
             </div>
             <Button
               className="w-full bg-[#7C3AED] hover:bg-[#7C3AED]/90"
@@ -225,11 +256,11 @@ export default function ProductsPage() {
                 });
               }}
             >
-              {createProductMutation.isPending ? "Adding..." : "Add Product"}
+              {createProductMutation.isPending ? "Adding..." : "Add Manually"}
             </Button>
-            {createProductMutation.error && (
+            {(createProductMutation.error || scrapeUrlMutation.error) && (
               <p className="text-sm text-red-600">
-                {createProductMutation.error.message}
+                {createProductMutation.error?.message ?? scrapeUrlMutation.error?.message}
               </p>
             )}
           </div>

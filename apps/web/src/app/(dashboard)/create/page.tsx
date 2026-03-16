@@ -47,12 +47,22 @@ export default function CreateVideoPage() {
   const [brandKitId, setBrandKitId] = useState<string>("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationProgress, setGenerationProgress] = useState(0);
+  const [showAssetPicker, setShowAssetPicker] = useState(false);
+  const [selectedAssetUrls, setSelectedAssetUrls] = useState<string[]>([]);
 
   const { data: presets } = trpc.preset.list.useQuery();
   const productsQuery = trpc.product.list.useQuery({ limit: 50 });
   const brandKitsQuery = trpc.brandKit.list.useQuery();
   const creditsQuery = trpc.credits.getBalance.useQuery();
+  const assetsQuery = trpc.asset.list.useQuery({ limit: 50, type: "IMAGE" });
   const createVideoMutation = trpc.video.create.useMutation();
+  const scrapeUrlMutation = trpc.product.scrapeUrl.useMutation({
+    onSuccess: (product) => {
+      productsQuery.refetch();
+      setSelectedProductId(product.id);
+      setProductUrl("");
+    },
+  });
 
   const selectedProduct = productsQuery.data?.products.find(
     (p) => p.id === selectedProductId
@@ -83,6 +93,12 @@ export default function CreateVideoPage() {
     }
   }
 
+  function toggleAsset(url: string) {
+    setSelectedAssetUrls((prev) =>
+      prev.includes(url) ? prev.filter((u) => u !== url) : [...prev, url]
+    );
+  }
+
   async function handleGenerate() {
     if (!videoType) return;
     setIsGenerating(true);
@@ -110,6 +126,10 @@ export default function CreateVideoPage() {
       setGenerationProgress(0);
     }
   }
+
+  const productImages = selectedProduct
+    ? (selectedProduct.images as string[] | null) ?? []
+    : [];
 
   return (
     <div className="mx-auto max-w-3xl">
@@ -175,14 +195,17 @@ export default function CreateVideoPage() {
                 />
                 <Button
                   variant="outline"
-                  disabled={!productUrl}
-                  onClick={() => {
-                    // TODO: trigger product scraping
-                  }}
+                  disabled={!productUrl || scrapeUrlMutation.isPending}
+                  onClick={() => scrapeUrlMutation.mutate({ url: productUrl })}
                 >
-                  Scrape
+                  {scrapeUrlMutation.isPending ? "Scraping..." : "Scrape"}
                 </Button>
               </div>
+              {scrapeUrlMutation.error && (
+                <p className="mt-2 text-sm text-red-500">
+                  {scrapeUrlMutation.error.message}
+                </p>
+              )}
             </CardContent>
           </Card>
 
@@ -228,9 +251,18 @@ export default function CreateVideoPage() {
                 <Card className="mt-4 border-[#7C3AED]/30 bg-[#7C3AED]/5">
                   <CardContent className="p-4">
                     <div className="flex items-start gap-4">
-                      <div className="flex h-16 w-16 items-center justify-center rounded-lg bg-muted text-2xl">
-                        📦
-                      </div>
+                      {productImages.length > 0 ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={productImages[0]}
+                          alt={selectedProduct.name}
+                          className="h-16 w-16 rounded-lg object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-16 w-16 items-center justify-center rounded-lg bg-muted text-2xl">
+                          📦
+                        </div>
+                      )}
                       <div className="flex-1">
                         <h3 className="font-medium">{selectedProduct.name}</h3>
                         {selectedProduct.description && (
@@ -245,10 +277,95 @@ export default function CreateVideoPage() {
                         )}
                       </div>
                     </div>
+                    {productImages.length > 1 && (
+                      <div className="mt-3 flex gap-2 overflow-x-auto">
+                        {productImages.slice(0, 5).map((img, i) => (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            key={i}
+                            src={img}
+                            alt={`Product ${i + 1}`}
+                            className="h-12 w-12 flex-shrink-0 rounded object-cover"
+                          />
+                        ))}
+                        {productImages.length > 5 && (
+                          <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded bg-muted text-xs text-muted-foreground">
+                            +{productImages.length - 5}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               )}
             </CardContent>
+          </Card>
+
+          {/* Asset Library Picker */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Your Assets</CardTitle>
+                  <CardDescription>
+                    Select images from your library to include in the video.
+                  </CardDescription>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowAssetPicker(!showAssetPicker)}
+                >
+                  {showAssetPicker ? "Hide" : "Browse"}
+                </Button>
+              </div>
+            </CardHeader>
+            {showAssetPicker && (
+              <CardContent>
+                {(assetsQuery.data?.assets.length ?? 0) === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    No images in your asset library.{" "}
+                    <a href="/assets" className="text-[#7C3AED] underline">
+                      Upload some first
+                    </a>
+                    .
+                  </p>
+                ) : (
+                  <div className="grid grid-cols-4 gap-2 sm:grid-cols-6">
+                    {assetsQuery.data?.assets.map((asset) => (
+                      <button
+                        key={asset.id}
+                        onClick={() => toggleAsset(asset.url)}
+                        className={`relative aspect-square overflow-hidden rounded-lg border-2 transition-all ${
+                          selectedAssetUrls.includes(asset.url)
+                            ? "border-[#7C3AED] ring-2 ring-[#7C3AED]/20"
+                            : "border-transparent hover:border-muted-foreground/30"
+                        }`}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={asset.url}
+                          alt={asset.filename}
+                          className="h-full w-full object-cover"
+                        />
+                        {selectedAssetUrls.includes(asset.url) && (
+                          <div className="absolute inset-0 flex items-center justify-center bg-[#7C3AED]/30">
+                            <div className="flex h-6 w-6 items-center justify-center rounded-full bg-[#7C3AED] text-xs text-white">
+                              ✓
+                            </div>
+                          </div>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {selectedAssetUrls.length > 0 && (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    {selectedAssetUrls.length} image(s) selected
+                  </p>
+                )}
+              </CardContent>
+            )}
           </Card>
         </div>
       )}
@@ -460,6 +577,14 @@ export default function CreateVideoPage() {
                       ?.name || "None"}
                   </span>
                 </div>
+                {selectedAssetUrls.length > 0 && (
+                  <div className="flex items-center justify-between rounded-lg border p-3">
+                    <span className="text-sm text-muted-foreground">Custom Assets</span>
+                    <span className="text-sm font-medium">
+                      {selectedAssetUrls.length} image(s)
+                    </span>
+                  </div>
+                )}
                 <div className="flex items-center justify-between rounded-lg border p-3">
                   <span className="text-sm text-muted-foreground">
                     Estimated Credits
