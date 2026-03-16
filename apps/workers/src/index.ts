@@ -97,6 +97,13 @@ async function main() {
 
   console.log("Workers starting with pg-boss...");
 
+  // Pre-create all queues so work() doesn't fail on missing queues
+  const allQueues = Object.values(QUEUE_NAMES);
+  for (const q of allQueues) {
+    await boss.createQueue(q);
+  }
+  console.log(`Created ${allQueues.length} queues`);
+
   // -------------------------------------------------------------------
   // Pipeline workers — with job chaining on success
   // -------------------------------------------------------------------
