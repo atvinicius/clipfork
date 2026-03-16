@@ -14,6 +14,7 @@ async function getBoss(): Promise<PgBoss> {
     }
     boss = new PgBoss({
       connectionString,
+      ssl: { rejectUnauthorized: false },
       schedule: false,
       supervise: false,
     });

@@ -8,7 +8,10 @@ export function getBoss(): PgBoss {
     if (!connectionString) {
       throw new Error("DATABASE_URL is required for pg-boss");
     }
-    boss = new PgBoss({ connectionString });
+    boss = new PgBoss({
+      connectionString,
+      ssl: { rejectUnauthorized: false },
+    });
   }
   return boss;
 }
