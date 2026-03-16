@@ -1,19 +1,7 @@
 import { z } from "zod";
 import { router, protectedProcedure } from "../init";
 import { TRPCError } from "@trpc/server";
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
-import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-
-function getR2Client() {
-  return new S3Client({
-    region: "auto",
-    endpoint: process.env.R2_ENDPOINT!,
-    credentials: {
-      accessKeyId: process.env.R2_ACCESS_KEY_ID!,
-      secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
-    },
-  });
-}
+import { getPresignedUploadUrl } from "@/lib/r2";
 
 export const assetRouter = router({
   getUploadUrl: protectedProcedure
@@ -28,17 +16,7 @@ export const assetRouter = router({
       const key = `${ctx.org.id}/${Date.now()}-${input.filename}`;
 
       try {
-        const command = new PutObjectCommand({
-          Bucket: process.env.R2_BUCKET_NAME!,
-          Key: key,
-          ContentType: input.mimeType,
-          ContentLength: input.sizeBytes,
-        });
-
-        const uploadUrl = await getSignedUrl(getR2Client(), command, {
-          expiresIn: 3600,
-        });
-
+        const uploadUrl = await getPresignedUploadUrl(key, input.mimeType);
         const publicUrl = `${process.env.R2_PUBLIC_URL}/${key}`;
 
         return { uploadUrl, key, publicUrl };
