@@ -113,7 +113,7 @@ export default function CreateVideoPage() {
         productId: selectedProductId || undefined,
         productUrl: productUrl || undefined,
         videoType: videoType === "VOICEOVER" ? "TALKING_HEAD" : "FACELESS",
-        brandKitId: brandKitId || undefined,
+        brandKitId: brandKitId && brandKitId !== "none" ? brandKitId : undefined,
         presetId,
         voiceId: selectedVoice || undefined,
       });

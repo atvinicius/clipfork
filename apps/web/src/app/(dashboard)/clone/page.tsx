@@ -326,7 +326,7 @@ export default function CloneViralPage() {
         templateId: analysisResult.templateId,
         productId: selectedProductId,
         voiceId: selectedVoice,
-        brandKitId: brandKitId || undefined,
+        brandKitId: brandKitId && brandKitId !== "none" ? brandKitId : undefined,
         presetId,
       });
 
