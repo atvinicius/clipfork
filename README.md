@@ -77,7 +77,7 @@ ugc/
 │   │   │   │   └── utils.ts           # cn() helper
 │   │   │   └── server/trpc/
 │   │   │       ├── init.ts             # tRPC context + procedures
-│   │   │       ├── router.ts           # Root router (10 sub-routers)
+│   │   │       ├── router.ts           # Root router (12 sub-routers)
 │   │   │       └── routers/
 │   │   │           ├── org.ts          # Organization + members
 │   │   │           ├── credits.ts      # Balance + transactions
@@ -93,7 +93,7 @@ ugc/
 │   │   │           └── tiktok.ts       # OAuth + publishing
 │   │   └── middleware.ts               # Clerk auth middleware
 │   │
-│   └── workers/                # BullMQ job processors
+│   └── workers/                # pg-boss job processors
 │       └── src/
 │           ├── index.ts                # Worker registration + shutdown
 │           ├── queues.ts               # Queue definitions
@@ -162,7 +162,7 @@ ugc/
 
 ```bash
 # Clone the repository
-git clone https://github.com/viniciusaraujo05/clipfork.git
+git clone https://github.com/atvinicius/clipfork.git
 cd clipfork
 
 # Install dependencies
@@ -191,6 +191,7 @@ All variables are documented in `.env.example`. At minimum, you need:
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `DATABASE_URL` | Yes | PostgreSQL connection string |
+| `REDIS_URL` | Yes | Redis connection string (Upstash) |
 | `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Yes | Clerk publishable key |
 | `CLERK_SECRET_KEY` | Yes | Clerk secret key |
 | `CLERK_WEBHOOK_SECRET` | Yes | Clerk webhook signing secret |
@@ -199,9 +200,10 @@ All variables are documented in `.env.example`. At minimum, you need:
 | `R2_ACCOUNT_ID` | For storage | Cloudflare R2 account ID |
 | `R2_ACCESS_KEY_ID` | For storage | R2 access key |
 | `R2_SECRET_ACCESS_KEY` | For storage | R2 secret key |
-| `ANTHROPIC_API_KEY` | For scripts | Claude API key |
+| `R2_BUCKET_NAME` | For storage | R2 bucket name (default: `ugc-assets`) |
+| `R2_PUBLIC_URL` | For storage | R2 public URL for asset access |
+| `OPENROUTER_API_KEY` | For AI | OpenRouter key (routes to Claude, Gemini) |
 | `ELEVENLABS_API_KEY` | For voice | ElevenLabs API key |
-| `GOOGLE_AI_API_KEY` | For analysis | Gemini API key |
 | `FAL_KEY` | For video gen | fal.ai API key (image/video/LoRA) |
 | `FIRECRAWL_API_KEY` | For scraping | Firecrawl API key |
 | `APIFY_API_TOKEN` | For monitoring | Apify API token |
@@ -220,6 +222,49 @@ pnpm db:push      # Push Prisma schema to database
 pnpm db:migrate   # Create and apply migrations
 pnpm db:studio    # Open Prisma Studio GUI
 ```
+
+## Production Deployment
+
+The app runs on three services:
+
+| Service | Platform | Purpose |
+|---------|----------|---------|
+| **Web App** | Vercel | Next.js frontend + tRPC API |
+| **Workers** | Railway | pg-boss job processors (video pipeline, scraping, monitoring) |
+| **Database** | Supabase | PostgreSQL (free tier, session pooler for IPv4) |
+
+### Infrastructure
+
+- **Vercel**: Auto-deploys from `main` branch. Uses `serverExternalPackages` for Prisma. Build command runs `prisma generate` before `next build`.
+- **Railway**: Runs `apps/workers/Dockerfile` (Node 20 + yt-dlp + FFmpeg). Connects to Supabase via session pooler (`aws-1-us-east-1.pooler.supabase.com:5432`) because Railway doesn't support IPv6 outbound and Supabase direct connections are IPv6-only.
+- **Supabase**: PostgreSQL with pg-boss tables. Schema managed via `prisma db push`.
+- **Cloudflare R2**: Asset storage with CORS configured for `clipfork.app` (browser PUT uploads via presigned URLs).
+- **Upstash**: Redis (used for rate limiting / caching).
+
+### Webhooks
+
+| Provider | Endpoint | Events |
+|----------|----------|--------|
+| **Clerk** | `https://clipfork.app/api/webhooks/clerk` | `user.created`, `user.updated`, `user.deleted` |
+| **Stripe** | `https://clipfork.app/api/webhooks/stripe` | `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.payment_succeeded`, `invoice.payment_failed` |
+
+### Deploying Workers
+
+```bash
+# Link to Railway project
+railway link
+
+# Deploy
+railway up
+
+# Check logs
+railway logs -n 50
+
+# Update env vars
+railway variables --set "DATABASE_URL=postgresql://..."
+```
+
+The workers Dockerfile installs `yt-dlp` and `ffmpeg` as system dependencies for video download and assembly.
 
 ## Architecture
 
