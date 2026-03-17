@@ -235,7 +235,7 @@ The app runs on three services:
 
 ### Infrastructure
 
-- **Vercel**: Auto-deploys from `main` branch. Uses `serverExternalPackages` for Prisma. Build command runs `prisma generate` before `next build`.
+- **Vercel**: Auto-deploys from `main` branch. Uses `serverExternalPackages` for Prisma. Build command runs `prisma generate` before `next build`. `DATABASE_URL` must use the Supabase session pooler; `DIRECT_URL` uses the direct connection for migrations.
 - **Railway**: Runs `apps/workers/Dockerfile` (Node 20 + yt-dlp + FFmpeg). Connects to Supabase via session pooler (`aws-1-us-east-1.pooler.supabase.com:5432`) because Railway doesn't support IPv6 outbound and Supabase direct connections are IPv6-only.
 - **Supabase**: PostgreSQL with pg-boss tables. Schema managed via `prisma db push`.
 - **Cloudflare R2**: Asset storage with CORS configured for `clipfork.app` (browser PUT uploads via presigned URLs).
