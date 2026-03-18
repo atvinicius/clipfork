@@ -1,5 +1,4 @@
 import { prisma } from "@ugc/db";
-import crypto from "node:crypto";
 
 // Enqueue jobs by inserting directly into the pg-boss job table.
 // This avoids holding session-mode pooler connections that pg-boss
@@ -10,15 +9,11 @@ export async function sendJob(
   queue: string,
   data: object
 ): Promise<string | null> {
-  const id = crypto.randomUUID();
-
-  await prisma.$executeRawUnsafe(
-    `INSERT INTO pgboss.job (id, name, data, state, priority, start_after, expire_seconds, retry_limit, keep_until)
-     VALUES ($1, $2, $3::jsonb, 'created', 0, now(), 900, 3, now() + interval '7 days')`,
-    id,
+  const rows = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
+    `INSERT INTO pgboss.job (name, data) VALUES ($1, $2::jsonb) RETURNING id`,
     queue,
     JSON.stringify(data)
   );
 
-  return id;
+  return rows[0]?.id ?? null;
 }
