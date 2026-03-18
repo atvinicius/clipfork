@@ -11,6 +11,7 @@ export function getBoss(): PgBoss {
     boss = new PgBoss({
       connectionString,
       ssl: { rejectUnauthorized: false },
+      max: 3,
     });
   }
   return boss;
