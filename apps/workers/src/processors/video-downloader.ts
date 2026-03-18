@@ -1,6 +1,13 @@
 import { execFile } from "child_process";
+import { promisify } from "util";
+import { mkdtemp, writeFile, rm } from "fs/promises";
+import { tmpdir } from "os";
+import { join } from "path";
+import { readFile } from "fs/promises";
 import { v4 as uuidv4 } from "uuid";
 import { uploadToR2 } from "../lib/r2";
+
+const execFileAsync = promisify(execFile);
 
 // ---------------------------------------------------------------------------
 // Types
@@ -16,6 +23,8 @@ export interface VideoDownloaderJobData {
 export interface VideoDownloaderResult {
   videoUrl: string;
   videoKey: string;
+  audioUrl?: string;
+  audioKey?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -141,15 +150,49 @@ export async function processVideoDownloaderJob(
     throw new Error("Downloaded video is empty");
   }
 
-  // Upload to R2
-  const videoId = uuidv4();
-  const videoKey = `clones/${orgId}/${videoId}.mp4`;
+  // Upload video to R2
+  const id = uuidv4();
+  const videoKey = `clones/${orgId}/${id}.mp4`;
 
-  console.log(`[video-downloader] Uploading to R2: ${videoKey}`);
-
+  console.log(`[video-downloader] Uploading video to R2: ${videoKey}`);
   const videoUrl = await uploadToR2(videoKey, videoBuffer, "video/mp4");
+  console.log(`[video-downloader] Video upload complete: ${videoUrl}`);
 
-  console.log(`[video-downloader] Upload complete: ${videoUrl}`);
+  // Extract audio from the downloaded video using FFmpeg
+  let audioUrl: string | undefined;
+  let audioKey: string | undefined;
+  let tempDir: string | null = null;
 
-  return { videoUrl, videoKey };
+  try {
+    tempDir = await mkdtemp(join(tmpdir(), `audio-extract-${id}-`));
+    const videoPath = join(tempDir, "source.mp4");
+    const audioPath = join(tempDir, "audio.aac");
+
+    await writeFile(videoPath, videoBuffer);
+    await execFileAsync("ffmpeg", [
+      "-i", videoPath,
+      "-vn",              // no video
+      "-acodec", "aac",
+      "-b:a", "128k",
+      "-y",
+      audioPath,
+    ], { timeout: 30_000 });
+
+    const audioBuffer = await readFile(audioPath);
+    audioKey = `clones/${orgId}/${id}-audio.aac`;
+    audioUrl = await uploadToR2(audioKey, audioBuffer, "audio/aac");
+
+    console.log(`[video-downloader] Audio extracted and uploaded: ${audioKey} (${audioBuffer.length} bytes)`);
+  } catch (audioErr) {
+    console.warn(
+      "[video-downloader] Audio extraction failed (non-fatal):",
+      audioErr instanceof Error ? audioErr.message : audioErr
+    );
+  } finally {
+    if (tempDir) {
+      await rm(tempDir, { recursive: true, force: true }).catch(() => {});
+    }
+  }
+
+  return { videoUrl, videoKey, audioUrl, audioKey };
 }

@@ -10,6 +10,7 @@ import { getPresignedUrl } from "../lib/r2";
 export interface CloneAnalyzerJobData {
   videoUrl: string;
   videoKey: string;
+  audioUrl?: string | null;
   sourceUrl: string;
   orgId: string;
 }
@@ -148,7 +149,7 @@ function parseJsonFromResponse(text: string): unknown {
 export async function processCloneAnalyzerJob(
   job: { data: CloneAnalyzerJobData }
 ): Promise<CloneAnalyzerResult> {
-  const { videoKey, sourceUrl, orgId } = job.data;
+  const { videoKey, audioUrl, sourceUrl, orgId } = job.data;
 
   console.log(
     `[clone-analyzer] Starting analysis for video: ${videoKey}`
@@ -234,7 +235,7 @@ export async function processCloneAnalyzerJob(
       orgId,
       sourceUrl,
       sourcePlatform: platform,
-      structure: validated as unknown as object,
+      structure: { ...validated, sourceAudioUrl: audioUrl ?? null } as unknown as object,
       category: validated.structure.hook.type,
       industry: [],
       engagementScore: null,

@@ -63,6 +63,29 @@ async function chainNextPipelineStep(
       break;
 
     case QUEUE_NAMES.SCRIPT:
+      // For CLONED videos, skip TTS — use the original viral audio instead
+      if (videoType === "CLONED") {
+        // Set the source audio URL on the Video record
+        const templateStruct = pipeline.templateStructure as Record<string, unknown> | null;
+        const sourceAudioUrl = (templateStruct as any)?.sourceAudioUrl as string | null;
+        if (sourceAudioUrl) {
+          const { prisma: db } = await import("@ugc/db");
+          await db.video.update({
+            where: { id: videoId },
+            data: { audioUrl: sourceAudioUrl },
+          });
+          console.log(`[pipeline] CLONED: skipping TTS, using source audio`);
+        } else {
+          console.warn(`[pipeline] CLONED: no source audio found, skipping TTS`);
+        }
+
+        await sendJob(QUEUE_NAMES.SCENE_GENERATOR, {
+          videoId,
+          _pipeline: pipeline,
+        });
+        break;
+      }
+
       await sendJob(QUEUE_NAMES.TTS, {
         videoId,
         scenes: [],
@@ -204,6 +227,7 @@ async function main() {
       await sendJob(QUEUE_NAMES.CLONE_ANALYZE, {
         videoUrl: result.videoUrl,
         videoKey: result.videoKey,
+        audioUrl: result.audioUrl ?? null,
         sourceUrl: data.sourceUrl ?? data.url,
         orgId: data.orgId,
       });
