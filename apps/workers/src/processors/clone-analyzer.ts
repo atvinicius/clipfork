@@ -203,8 +203,23 @@ export async function processCloneAnalyzerJob(
   console.log(`[clone-analyzer] Gemini response received`);
 
   // 3. Parse and validate the structure
-  const parsed = parseJsonFromResponse(responseText);
-  const validated = templateStructureSchema.parse(parsed);
+  let parsed: unknown;
+  try {
+    parsed = parseJsonFromResponse(responseText);
+  } catch (parseErr) {
+    console.error(`[clone-analyzer] JSON parse failed:`, parseErr);
+    console.error(`[clone-analyzer] Raw response:`, responseText.substring(0, 500));
+    throw parseErr;
+  }
+
+  let validated;
+  try {
+    validated = templateStructureSchema.parse(parsed);
+  } catch (zodErr) {
+    console.error(`[clone-analyzer] Zod validation failed:`, zodErr);
+    console.error(`[clone-analyzer] Parsed data:`, JSON.stringify(parsed).substring(0, 500));
+    throw zodErr;
+  }
 
   console.log(
     `[clone-analyzer] Structure validated: ${validated.structure.scenes.length} scenes, ${validated.format.total_duration_s}s total`
