@@ -54,65 +54,36 @@ async function downloadWithYtDlp(url: string): Promise<Buffer> {
 }
 
 // ---------------------------------------------------------------------------
-// RapidAPI TikTok fallback
+// TikTok download API fallback (no auth required)
 // ---------------------------------------------------------------------------
 
-async function downloadWithRapidAPI(url: string): Promise<Buffer> {
-  const rapidApiKey = process.env.RAPIDAPI_KEY;
-  if (!rapidApiKey) {
-    throw new Error("RAPIDAPI_KEY is not configured");
+async function downloadWithTikTokAPI(url: string): Promise<Buffer> {
+  const apiUrl = `https://tdownv4.sl-bjs.workers.dev/?down=${encodeURIComponent(url)}`;
+
+  const response = await fetch(apiUrl, {
+    signal: AbortSignal.timeout(15_000),
+  });
+
+  if (!response.ok) {
+    throw new Error(`TikTok download API failed with status ${response.status}`);
   }
 
-  // Step 1: Get download URL from RapidAPI
-  const analysisResponse = await fetch(
-    "https://tiktok-download-without-watermark.p.rapidapi.com/analysis",
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-rapidapi-host":
-          "tiktok-download-without-watermark.p.rapidapi.com",
-        "x-rapidapi-key": rapidApiKey,
-      },
-      body: JSON.stringify({ url }),
-    }
-  );
-
-  if (!analysisResponse.ok) {
-    throw new Error(
-      `RapidAPI analysis failed with status ${analysisResponse.status}`
-    );
-  }
-
-  const analysisData = (await analysisResponse.json()) as {
-    code: number;
-    data?: { play?: string; wmplay?: string; hdplay?: string };
+  const data = (await response.json()) as {
+    download_url?: string;
+    title?: string;
   };
 
-  if (analysisData.code !== 0 || !analysisData.data) {
-    throw new Error("RapidAPI analysis returned no data");
+  if (!data.download_url) {
+    throw new Error("TikTok download API returned no download URL");
   }
 
-  const videoUrl =
-    analysisData.data.hdplay ||
-    analysisData.data.play ||
-    analysisData.data.wmplay;
-
-  if (!videoUrl) {
-    throw new Error("No video URL found in RapidAPI response");
-  }
-
-  // Step 2: Download the video
-  const videoResponse = await fetch(videoUrl, {
-    headers: {
-      "User-Agent":
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    },
+  const videoResponse = await fetch(data.download_url, {
+    signal: AbortSignal.timeout(60_000),
   });
 
   if (!videoResponse.ok) {
     throw new Error(
-      `Failed to download video from RapidAPI URL: ${videoResponse.status}`
+      `Failed to download video: ${videoResponse.status}`
     );
   }
 
@@ -141,26 +112,26 @@ export async function processVideoDownloaderJob(
     );
   } catch (ytDlpError) {
     console.warn(
-      "[video-downloader] yt-dlp failed, trying RapidAPI fallback:",
+      "[video-downloader] yt-dlp failed, trying TikTok API fallback:",
       ytDlpError instanceof Error ? ytDlpError.message : ytDlpError
     );
 
-    // Try RapidAPI fallback
+    // Try TikTok download API fallback
     try {
-      videoBuffer = await downloadWithRapidAPI(url);
+      videoBuffer = await downloadWithTikTokAPI(url);
       console.log(
-        `[video-downloader] RapidAPI download succeeded (${videoBuffer.length} bytes)`
+        `[video-downloader] TikTok API download succeeded (${videoBuffer.length} bytes)`
       );
     } catch (rapidApiError) {
       console.error(
-        "[video-downloader] RapidAPI fallback also failed:",
+        "[video-downloader] TikTok API fallback also failed:",
         rapidApiError instanceof Error
           ? rapidApiError.message
           : rapidApiError
       );
 
       throw new Error(
-        "Could not download video. Both yt-dlp and RapidAPI failed. " +
+        "Could not download video. Both yt-dlp and TikTok API failed. " +
           "Please try uploading the video directly instead."
       );
     }
