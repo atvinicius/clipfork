@@ -225,9 +225,15 @@ async function uploadProductImages(
 export async function processScraperJob(job: { data: ScraperJobData }) {
   const { productUrl, productId, orgId } = job.data;
 
-  console.log(`[scraper] Starting scrape for product ${productId}: ${productUrl}`);
+  console.log(`[scraper] Starting scrape for product ${productId}: ${productUrl || "(no URL)"}`);
 
   try {
+    // If no product URL, skip scraping and use existing product data from DB
+    if (!productUrl) {
+      console.log(`[scraper] No product URL — skipping scrape, using existing product data`);
+      return;
+    }
+
     // Try Firecrawl first, fall back to cheerio
     let scrapedData: ScrapedProductData;
 
