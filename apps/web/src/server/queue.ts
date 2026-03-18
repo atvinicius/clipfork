@@ -13,7 +13,7 @@ export async function sendJob(
   const id = crypto.randomUUID();
 
   await prisma.$executeRawUnsafe(
-    `INSERT INTO pgboss.job (id, name, data, state, priority, "startAfter", "expireInSeconds", "retryLimit", "keepUntil")
+    `INSERT INTO pgboss.job (id, name, data, state, priority, start_after, expire_seconds, retry_limit, keep_until)
      VALUES ($1, $2, $3::jsonb, 'created', 0, now(), 900, 3, now() + interval '7 days')`,
     id,
     queue,
