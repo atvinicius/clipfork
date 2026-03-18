@@ -215,7 +215,15 @@ async function main() {
   await boss.work(
     QUEUE_NAMES.CLONE_ANALYZE,
     { localConcurrency: 2 },
-    async (jobs) => { await processCloneAnalyzerJob(jobs[0] as any); }
+    async (jobs) => {
+      try {
+        await processCloneAnalyzerJob(jobs[0] as any);
+      } catch (err) {
+        console.error("[clone-analyze] FAILED:", err instanceof Error ? err.message : err);
+        console.error("[clone-analyze] Stack:", err instanceof Error ? err.stack : "");
+        throw err;
+      }
+    }
   );
 
   await boss.work(
