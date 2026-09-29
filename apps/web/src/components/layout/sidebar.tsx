@@ -16,6 +16,7 @@ import {
   Settings,
   CreditCard,
   MonitorPlay,
+  Radar,
 } from "lucide-react";
 
 const mainNav = [
@@ -24,6 +25,7 @@ const mainNav = [
   { href: "/clone", label: "Clone Viral", icon: Copy },
   { href: "/templates", label: "Templates", icon: LayoutTemplate },
   { href: "/competitors", label: "Competitor Intel", icon: Eye },
+  { href: "/intel", label: "Intelligence", icon: Radar },
   { href: "/videos", label: "My Videos", icon: Video },
   { href: "/products", label: "Products", icon: Package },
   { href: "/brand-kits", label: "Brand Kits", icon: Palette },

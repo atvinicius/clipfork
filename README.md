@@ -266,6 +266,44 @@ railway variables --set "DATABASE_URL=postgresql://..."
 
 The workers Dockerfile installs `yt-dlp` and `ffmpeg` as system dependencies for video download and assembly.
 
+## Intelligence Layer
+
+A platform-wide (non-org-scoped) data layer that continuously collects TikTok and Instagram content and turns it into actionable signals for content strategy.
+
+### Components
+
+```
+IntelTarget (account/hashtag/sound/keyword)
+   │
+   ▼  intel-dispatch cron (10 min) — due targets → crawl runs
+intel-collect — Apify actors → normalized posts
+   │               ├── upsert creators (follower snapshots, hourly)
+   │               ├── upsert sounds   (platform + external identity)
+   │               ├── upsert posts    (metric snapshots, hourly buckets)
+   │               └── enqueue intel-download per download policy
+   ▼
+intel-download — yt-dlp → R2 → ffmpeg audio → chromaprint fingerprint
+                 → AudD identification (commercial tracks, ISRC, DSP links)
+   ▼
+intel-signals cron (20 min)
+   ├── VIRAL_POST        — 5× creator-median outliers / absolute viral
+   ├── RISING_SOUND      — sound usage growth, 48h vs prior 48h
+   ├── CREATOR_BREAKOUT  — follower growth over 7d
+   └── HASHTAG_TREND     — hashtag volume + velocity growth
+```
+
+- **Corpus is global**: `Intel*` tables are shared across orgs — the same collection infrastructure benefits every workspace. `createdByOrgId` records provenance.
+- **Snapshots over time**: posts, creators, and sounds snapshot into hourly buckets (`@@unique(entity, bucket)`), so velocity/virality are computed from real deltas, not point-in-time stats.
+- **Music identification**: free via platform `musicMeta` first; original/unattributed audio is fingerprinted (chromaprint via `fpcalc`) and identified through AudD (`AUDD_API_KEY`) when configured — results carry ISRC + Spotify/Apple/Deezer links for cross-platform sound matching.
+- **Download policies** per target: `NONE`, `VIRAL_ONLY`, `TOP_K`, `ALL` — capped by `INTEL_MAX_DOWNLOADS_PER_CRAWL`.
+- **Resilience**: exponential backoff on failing targets (`consecutiveFailures`), singleton jobs prevent duplicate crawls/downloads, `IntelCrawlRun` audits every run.
+- **Scale knobs**: `INTEL_PROXY_URL`, `TIKTOK_COOKIES_B64`, `IG_COOKIES_B64` for yt-dlp downloads; Apify actor usage is the paid, reliable collection path.
+
+### Consuming it
+
+- **Dashboard**: `/intel` — viral posts feed, trending sounds, breakout creators, active signals, target management.
+- **tRPC**: `intel.*` router (`feedPosts`, `trendingSounds`, `topCreators`, `listSignals`, `postDetail`, `soundDetail`, `creatorDetail`, `enqueueDownload`).
+
 ## Architecture
 
 ### Video Generation Pipeline

@@ -15,6 +15,10 @@ import { processCloneAnalyzerJob } from "./processors/clone-analyzer";
 import { processMonitorJob } from "./processors/monitor";
 import { processPublishJob } from "./processors/publisher";
 import { processSchedulerJob } from "./processors/scheduler";
+import { processIntelDispatcherJob } from "./processors/intel-dispatcher";
+import { processIntelCollectJob } from "./processors/intel-collect";
+import { processIntelDownloadJob } from "./processors/intel-download";
+import { processIntelSignalsJob } from "./processors/intel-signals";
 import type { ScriptJobData } from "./processors/script-generator";
 import type { TTSJobData } from "./processors/tts";
 
@@ -269,10 +273,46 @@ async function main() {
   );
 
   // -------------------------------------------------------------------
+  // Intelligence layer workers
+  // -------------------------------------------------------------------
+
+  await boss.work(
+    QUEUE_NAMES.INTEL_DISPATCH,
+    { localConcurrency: 1 },
+    async () => { await processIntelDispatcherJob(); }
+  );
+
+  await boss.work(
+    QUEUE_NAMES.INTEL_COLLECT,
+    { localConcurrency: 4 },
+    async (jobs) => { await processIntelCollectJob(jobs[0] as any); }
+  );
+
+  await boss.work(
+    QUEUE_NAMES.INTEL_DOWNLOAD,
+    { localConcurrency: 3 },
+    async (jobs) => { await processIntelDownloadJob(jobs[0] as any); }
+  );
+
+  await boss.work(
+    QUEUE_NAMES.INTEL_SIGNALS,
+    { localConcurrency: 1 },
+    async () => { await processIntelSignalsJob(); }
+  );
+
+  // -------------------------------------------------------------------
   // Scheduler cron — check for scheduled publishes every 5 minutes
   // -------------------------------------------------------------------
 
   await boss.schedule(QUEUE_NAMES.SCHEDULER, "*/5 * * * *", {
+    _trigger: "cron",
+  });
+
+  // Intelligence layer crons
+  await boss.schedule(QUEUE_NAMES.INTEL_DISPATCH, "*/10 * * * *", {
+    _trigger: "cron",
+  });
+  await boss.schedule(QUEUE_NAMES.INTEL_SIGNALS, "*/20 * * * *", {
     _trigger: "cron",
   });
 
@@ -288,6 +328,10 @@ async function main() {
   console.log("  - monitor            (concurrency: 2)");
   console.log("  - publish            (concurrency: 2)");
   console.log("  - scheduler          (concurrency: 1, cron: every 5 min)");
+  console.log("  - intel-dispatch     (concurrency: 1, cron: every 10 min)");
+  console.log("  - intel-collect      (concurrency: 4)");
+  console.log("  - intel-download     (concurrency: 3)");
+  console.log("  - intel-signals      (concurrency: 1, cron: every 20 min)");
   console.log("Workers ready and listening for jobs via pg-boss...");
 
   // -------------------------------------------------------------------

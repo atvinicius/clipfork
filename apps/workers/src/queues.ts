@@ -13,12 +13,21 @@ export const QUEUE_NAMES = {
   PUBLISH: "publish",
   SCHEDULER: "scheduler",
   CLONE: "clone",
+  INTEL_DISPATCH: "intel-dispatch",
+  INTEL_COLLECT: "intel-collect",
+  INTEL_DOWNLOAD: "intel-download",
+  INTEL_SIGNALS: "intel-signals",
 } as const;
 
 export async function sendJob(
   queue: string,
   data: object,
-  options?: { priority?: number; retryLimit?: number; startAfter?: number }
+  options?: {
+    priority?: number;
+    retryLimit?: number;
+    startAfter?: number;
+    singletonKey?: string;
+  }
 ): Promise<string | null> {
   const boss = getBoss();
   return boss.send(queue, data, options);

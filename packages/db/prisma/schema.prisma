@@ -328,3 +328,274 @@ model TikTokAccount {
   @@unique([orgId, tikTokUserId])
   @@index([orgId])
 }
+
+// ---------------------------------------------------------------------------
+// Intelligence layer — platform-wide (non-org-scoped) collection on top of
+// TikTok and Instagram. IntelTarget drives a DB-backed crawl queue; posts,
+// creators, and sounds are normalized globally and snapshotted hourly so the
+// signal engine can compute velocity, virality, and trend detection.
+// ---------------------------------------------------------------------------
+
+enum IntelTargetType {
+  ACCOUNT
+  HASHTAG
+  SOUND
+  KEYWORD
+}
+
+enum IntelDownloadPolicy {
+  NONE
+  TOP_K
+  VIRAL_ONLY
+  ALL
+}
+
+enum IntelMediaStatus {
+  NONE
+  PENDING
+  DOWNLOADING
+  READY
+  FAILED
+}
+
+enum IntelSignalType {
+  VIRAL_POST
+  RISING_SOUND
+  CREATOR_BREAKOUT
+  HASHTAG_TREND
+}
+
+enum IntelCrawlStatus {
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+model IntelTarget {
+  id                    String              @id @default(uuid())
+  type                  IntelTargetType
+  platform              Platform
+  value                 String
+  crawlFrequencyMinutes Int                 @default(360)
+  priority              Int                 @default(0)
+  downloadPolicy        IntelDownloadPolicy @default(VIRAL_ONLY)
+  downloadTopK          Int                 @default(5)
+  isActive              Boolean             @default(true)
+  lastCrawledAt         DateTime?
+  nextCrawlAt           DateTime            @default(now())
+  consecutiveFailures   Int                 @default(0)
+  createdByOrgId        String?
+  notes                 String?
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+
+  crawlRuns IntelCrawlRun[]
+  posts     IntelPostTarget[]
+
+  @@unique([platform, type, value])
+  @@index([isActive, nextCrawlAt])
+}
+
+model IntelCreator {
+  id             String   @id @default(uuid())
+  platform       Platform
+  platformUserId String?
+  username       String
+  displayName    String?
+  bio            String?
+  avatarUrl      String?
+  verified       Boolean  @default(false)
+  followers      BigInt   @default(0)
+  following      Int      @default(0)
+  likesTotal     BigInt   @default(0)
+  videoCount     Int      @default(0)
+  medianViews    BigInt   @default(0)
+  firstSeenAt    DateTime @default(now())
+  lastSeenAt     DateTime @default(now())
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  posts     IntelPost[]
+  snapshots IntelCreatorSnapshot[]
+  signals   IntelSignal[]
+
+  @@unique([platform, username])
+  @@index([platform])
+}
+
+model IntelCreatorSnapshot {
+  id         String   @id @default(uuid())
+  creatorId  String
+  bucket     DateTime
+  followers  BigInt   @default(0)
+  following  Int      @default(0)
+  likesTotal BigInt   @default(0)
+  videoCount Int      @default(0)
+  createdAt  DateTime @default(now())
+
+  creator IntelCreator @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+
+  @@unique([creatorId, bucket])
+  @@index([bucket])
+}
+
+model IntelSound {
+  id              String   @id @default(uuid())
+  platform        Platform
+  platformSoundId String
+  title           String?
+  artist          String?
+  album           String?
+  durationSec     Int?
+  isOriginalAudio Boolean  @default(false)
+  usageCount      BigInt   @default(0)
+  identifiedVia   String?
+  isrc            String?
+  externalUrl     String?
+  coverUrl        String?
+  firstSeenAt     DateTime @default(now())
+  lastSeenAt      DateTime @default(now())
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  posts     IntelPost[]
+  snapshots IntelSoundSnapshot[]
+  signals   IntelSignal[]
+
+  @@unique([platform, platformSoundId])
+  @@index([platform])
+  @@index([isrc])
+}
+
+model IntelSoundSnapshot {
+  id         String   @id @default(uuid())
+  soundId    String
+  bucket     DateTime
+  postCount  Int      @default(0)
+  usageCount BigInt   @default(0)
+  avgViews   Float    @default(0)
+  createdAt  DateTime @default(now())
+
+  sound IntelSound @relation(fields: [soundId], references: [id], onDelete: Cascade)
+
+  @@unique([soundId, bucket])
+  @@index([bucket])
+}
+
+model IntelPost {
+  id               String           @id @default(uuid())
+  platform         Platform
+  platformPostId   String
+  url              String
+  creatorId        String?
+  soundId          String?
+  caption          String?
+  hashtags         String[]         @default([])
+  mentions         String[]         @default([])
+  postedAt         DateTime?
+  durationSec      Int?
+  views            BigInt           @default(0)
+  likes            Int              @default(0)
+  comments         Int              @default(0)
+  shares           Int              @default(0)
+  saves            Int              @default(0)
+  engagementRate   Float            @default(0)
+  velocityPerHour  Float            @default(0)
+  viralityScore    Float            @default(0)
+  isOutlier        Boolean          @default(false)
+  mediaStatus      IntelMediaStatus @default(NONE)
+  videoKey         String?
+  audioKey         String?
+  audioFingerprint String?
+  mediaSha256      String?
+  mediaError       String?
+  coverUrl         String?
+  rawJson          Json             @default("{}")
+  firstSeenAt      DateTime         @default(now())
+  lastSeenAt       DateTime         @default(now())
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  creator   IntelCreator?      @relation(fields: [creatorId], references: [id], onDelete: SetNull)
+  sound     IntelSound?        @relation(fields: [soundId], references: [id], onDelete: SetNull)
+  snapshots IntelPostSnapshot[]
+  targets   IntelPostTarget[]
+  signals   IntelSignal[]
+
+  @@unique([platform, platformPostId])
+  @@index([platform, postedAt])
+  @@index([creatorId])
+  @@index([soundId])
+  @@index([viralityScore])
+  @@index([mediaStatus])
+}
+
+model IntelPostTarget {
+  postId      String
+  targetId    String
+  firstSeenAt DateTime @default(now())
+
+  post   IntelPost   @relation(fields: [postId], references: [id], onDelete: Cascade)
+  target IntelTarget @relation(fields: [targetId], references: [id], onDelete: Cascade)
+
+  @@id([postId, targetId])
+}
+
+model IntelPostSnapshot {
+  id          String   @id @default(uuid())
+  postId      String
+  bucket      DateTime
+  views       BigInt   @default(0)
+  likes       Int      @default(0)
+  comments    Int      @default(0)
+  shares      Int      @default(0)
+  saves       Int      @default(0)
+  collectedAt DateTime @default(now())
+
+  post IntelPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, bucket])
+  @@index([bucket])
+}
+
+model IntelSignal {
+  id          String          @id @default(uuid())
+  type        IntelSignalType
+  platform    Platform
+  score       Float
+  postId      String?
+  soundId     String?
+  creatorId   String?
+  hashtag     String?
+  payload     Json            @default("{}")
+  firstSeenAt DateTime        @default(now())
+  lastSeenAt  DateTime        @default(now())
+  isActive    Boolean         @default(true)
+
+  post    IntelPost?    @relation(fields: [postId], references: [id], onDelete: Cascade)
+  sound   IntelSound?   @relation(fields: [soundId], references: [id], onDelete: Cascade)
+  creator IntelCreator? @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+
+  @@index([type, isActive, score])
+  @@index([platform])
+  @@index([postId])
+  @@index([soundId])
+}
+
+model IntelCrawlRun {
+  id                String           @id @default(uuid())
+  targetId          String
+  status            IntelCrawlStatus @default(RUNNING)
+  itemsFound        Int              @default(0)
+  newPosts          Int              @default(0)
+  newSounds         Int              @default(0)
+  newCreators       Int              @default(0)
+  downloadsEnqueued Int              @default(0)
+  error             String?
+  startedAt         DateTime         @default(now())
+  finishedAt        DateTime?
+
+  target IntelTarget @relation(fields: [targetId], references: [id], onDelete: Cascade)
+
+  @@index([targetId, startedAt])
+}
